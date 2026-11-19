@@ -1,0 +1,19 @@
+# Dependencies and generated output
+/node_modules/
+/.next/
+/out/
+/coverage/
+/playwright-report/
+/test-results/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local configuration and deployment state
+.env*
+!.env.example
+/.vercel/
+*.pem
+
+# Local logs and operating-system files
+*.log
+.DS_Store
