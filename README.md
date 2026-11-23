@@ -4,7 +4,11 @@ A portfolio wedding-management application built as a modular monolith with Next
 
 ## Current status
 
-This repository contains the application scaffold and project documentation. The homepage is a static placeholder. Authentication, database persistence, business APIs, email delivery, photo uploads, and dashboard screens are not implemented yet. No external services are contacted by the shell.
+See the [development progress tracker](docs/development-progress.md) for feature status, open issues, verification, and the work log. Repository agent instructions in [AGENTS.md](AGENTS.md) require updates alongside future features and bug fixes.
+
+The responsive landing page is implemented from the desktop and mobile Stitch designs. It includes section navigation, a mobile menu, accessible FAQs, and temporary account-action messages. Dashboard, guest, expense, gallery, and livestream previews are fictional illustrations. Authentication, database persistence, business APIs, email delivery, photo uploads, and full dashboard screens are not implemented yet.
+
+The landing page uses local assets and makes no database, email, storage, or Stitch requests. Create-wedding and login buttons explain that account access is coming next. Privacy and Terms links will be added when their content is ready.
 
 ## Local setup
 
@@ -17,7 +21,7 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:3000>. An environment file is not required to run or build the initial shell.
+Open <http://localhost:3000>. An environment file is not required to run or build the landing page.
 
 If using another Node manager, select Node 24 before installing dependencies. An existing Homebrew Node 24 installation can also be selected for the current terminal:
 
@@ -51,13 +55,18 @@ Run `npm run check` and `npm run build` before submitting changes. Linting runs 
 ## Structure and conventions
 
 ```text
-docs/                  Existing requirements and implementation contracts
-src/app/layout.tsx     Root layout, metadata, and Node.js runtime
-src/app/page.tsx       Placeholder homepage
-src/app/globals.css    Global reset, design tokens, and shell styles
+docs/                      Existing requirements and implementation contracts
+public/images/landing/     Wedding imagery from the approved Stitch exports
+src/app/fonts/             Local Inter/Playfair Display fonts and OFL licenses
+src/app/layout.tsx         Root layout, fonts, metadata, and Node.js runtime
+src/app/page.tsx           Homepage entry point
+src/app/globals.css        Global reset and design tokens
+src/components/landing/    Landing content, previews, client controls, and CSS Module
 ```
 
-TypeScript uses strict mode and the `@/*` alias for `src/*`. Use CSS Modules for future component styles and global CSS variables for shared design tokens. System fonts keep startup and builds independent of remote font services.
+TypeScript uses strict mode and the `@/*` alias for `src/*`. Component styles use CSS Modules, with global CSS variables for shared design tokens. Inter and Playfair Display are self-hosted through `next/font/local`; their SIL Open Font License files are included beside them. No remote font or Stitch credential is needed at build time or in the browser.
+
+Most landing content renders on the server. Only the mobile navigation and account notices use client-side React. Native dialogs supply modal focus handling and Escape dismissal; native details/summary elements supply keyboard-accessible FAQs. The copy follows the implementation contracts, including individual guest invitations, one owner, manual email reminders, separate photo grants, and individual original downloads.
 
 Add folders only when implementing their features:
 
@@ -104,7 +113,7 @@ The API's `/api/v1` paths supersede the architecture's illustrative paths. The d
 5. Expenses, payment-date rules, totals, soft deletion, and concurrent-edit handling.
 6. Private photos, storage accounting, previews, original downloads, cleanup, QR codes, livestream settings, and acceptance verification.
 
-Add meaningful tests as domain behavior appears; the static placeholder does not need file-existence tests. MongoDB integration tests must exercise indexes and transactions, not just mocked model calls.
+Verify landing-page navigation, mobile-menu dismissal, account notices, FAQ keyboard access, reduced-motion behavior, image loading, and narrow-screen layout during browser QA. Add automated domain tests as business behavior appears; avoid file-existence tests. MongoDB integration tests must exercise indexes and transactions, not just mocked model calls.
 
 ## Deployment
 

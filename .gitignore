@@ -14,6 +14,10 @@ next-env.d.ts
 /.vercel/
 *.pem
 
+# Local MCP authentication
+/.mcp.json
+/.vscode/mcp.json
+
 # Local logs and operating-system files
 *.log
 .DS_Store
