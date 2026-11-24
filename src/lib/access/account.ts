@@ -1,25 +1,41 @@
 import "server-only";
 import mongoose, { Types } from "mongoose";
 import { auth } from "@/auth";
-import { accountConfigured } from "@/lib/config/server";
-import { ensureIdentityDatabase } from "@/lib/db/readiness";
+import { getToken } from "next-auth/jwt";
+import { headers } from "next/headers";
+import { accountConfigured, appOrigin, authSecret } from "@/lib/config/server";
 import { AppError } from "@/lib/http/errors";
-import { User } from "@/modules/identity/models";
+import { currentSessionUser } from "@/modules/identity/service";
+import { emailVerificationSatisfied } from "./email-verification";
 
 export async function currentAccount() {
   if (!accountConfigured()) return null;
   const session = await auth();
   if (!session?.user?.id || !Types.ObjectId.isValid(session.user.id))
     return null;
-  await ensureIdentityDatabase();
-  return User.findOne({ _id: session.user.id, status: "active" }).lean();
+  // Keep the authenticated generation from the JWT. A password reset between
+  // auth() and this database read must not upgrade an old session to a new one.
+  const secureCookie = appOrigin().startsWith("https:");
+  const cookieName = secureCookie
+    ? "__Secure-authjs.session-token"
+    : "authjs.session-token";
+  const token = await getToken({
+    req: { headers: new Headers(await headers()) },
+    secret: authSecret(),
+    secureCookie,
+    cookieName,
+    salt: cookieName,
+  });
+  if (!token || token.sub !== session.user.id) return null;
+  return currentSessionUser(token.sub, token.sessionVersion);
 }
 
 export async function currentUserDto() {
   const user = await currentAccount();
   if (!user)
     throw new AppError(401, "AUTHENTICATION_REQUIRED", "Log in to continue.");
-  // Read-only integration with the membership contract; creation/administration comes next.
+  // Return the current membership without requiring wedding-service configuration
+  // for identity-only accounts. Wedding writes enforce their migration separately.
   const db = mongoose.connection.db!;
   const membership = await db
     .collection<{
@@ -54,7 +70,7 @@ export async function currentUserDto() {
     id: user._id.toString(),
     name: user.name,
     email: user.emailNormalized,
-    emailVerified: !!user.emailVerifiedAt,
+    emailVerified: emailVerificationSatisfied(user),
     membership: currentMembership,
   };
 }

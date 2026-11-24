@@ -1,0 +1,1160 @@
+.page {
+  min-height: 100svh;
+  background: var(--color-background);
+}
+.skip {
+  position: absolute;
+  left: 20px;
+  top: -80px;
+  z-index: 30;
+  padding: 12px;
+  background: white;
+}
+.skip:focus {
+  top: 12px;
+}
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  min-height: 76px;
+  background: #fff8f8ed;
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid #eadce14a;
+}
+.headerInner {
+  max-width: 1440px;
+  padding: 18px 5vw;
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 600;
+  color: var(--color-accent-deep);
+  text-decoration: none;
+  line-height: 1.2;
+  letter-spacing: -1px;
+}
+.account {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 14px;
+  color: var(--color-muted);
+}
+.accountEmail {
+  max-width: 270px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.accountMenu {
+  position: relative;
+}
+.accountMenu summary {
+  cursor: pointer;
+  background: var(--color-accent-deep);
+  color: white;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  list-style: none;
+}
+.accountMenu summary::-webkit-details-marker {
+  display: none;
+}
+.accountMenu svg {
+  width: 20px;
+  height: 20px;
+}
+.accountMenu > div {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  width: min(300px, 85vw);
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 12px 28px #4b042015;
+  display: grid;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+.main {
+  width: calc(100% - 128px);
+  max-width: 1152px;
+  margin: auto;
+  padding: 64px 0 80px;
+  outline: none;
+}
+.hero {
+  margin-bottom: 48px;
+}
+.hero h1,
+.reviewHero h1 {
+  font-family: var(--font-display);
+  font-size: 44px;
+  line-height: 1.2;
+  letter-spacing: -1.5px;
+  font-weight: 500;
+  margin: 28px 0 12px;
+  scroll-margin-top: 110px;
+  outline: none;
+}
+.hero > p,
+.reviewHero > p {
+  font-size: 18px;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+.hero .inviteNote {
+  margin-top: 24px;
+  font-size: 14px;
+  color: var(--color-accent);
+}
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  font-size: 14px;
+  color: #8c7b82;
+}
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.steps li:first-child::after {
+  content: "";
+  width: 40px;
+  height: 1px;
+  background: var(--color-border);
+  margin-left: 10px;
+}
+.steps li > span {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #f3e7ec;
+}
+.steps li[aria-current] {
+  color: var(--color-accent-deep);
+}
+.steps li[aria-current] > span {
+  background: var(--color-accent);
+  color: white;
+}
+.steps svg {
+  width: 16px;
+  height: 16px;
+}
+.setupGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 64px;
+  align-items: start;
+}
+.formCard,
+.reviewCard {
+  padding: 40px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 3px 8px #2b202509;
+  min-width: 0;
+}
+.formFields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 56px;
+  min-width: 0;
+}
+.formSection {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.formSection h2,
+.formSection legend,
+.sectionHeading h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1.35;
+  font-weight: 500;
+  letter-spacing: -0.4px;
+}
+.formSection legend {
+  padding: 0;
+  margin-bottom: 14px;
+}
+.sectionHeading {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.sectionHeading > span {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--color-muted);
+}
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px 16px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.field label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.field label > span {
+  color: var(--color-accent);
+}
+.field input,
+.formSection textarea,
+.teamForm input,
+.teamForm select {
+  min-height: 48px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #fff0f5;
+  color: var(--color-text);
+  font-size: 16px;
+}
+.field input:focus,
+.formSection textarea:focus,
+.teamForm input:focus,
+.teamForm select:focus {
+  outline: 2px solid #a54665;
+  outline-offset: 2px;
+}
+.field input[aria-invalid="true"] {
+  border-color: #a52f34;
+}
+.field small,
+.small {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+.muted {
+  font-size: 14px;
+  color: var(--color-muted);
+  line-height: 1.65;
+}
+.fieldError {
+  font-size: 13px;
+  color: #a12f35;
+}
+.introduction {
+  background: #fff0f5;
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+.introduction summary {
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+}
+.introduction summary span {
+  font-weight: 400;
+  color: var(--color-muted);
+}
+.introduction label {
+  display: block;
+  margin: 14px 0 8px;
+}
+.introduction textarea {
+  background: white;
+  resize: vertical;
+}
+.roleGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.roleCard {
+  cursor: pointer;
+  min-width: 0;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: #fff0f5;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+  position: relative;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.roleCard:has(input:checked) {
+  color: var(--color-accent);
+  border-color: #b47b8d;
+  background: #fce9f0;
+}
+.roleCard:has(input:focus-visible) {
+  outline: 3px solid #a54665;
+  outline-offset: 3px;
+}
+.roleCard input {
+  position: absolute;
+  right: 15px;
+  top: 17px;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+}
+.roleCard svg {
+  width: 22px;
+  height: 22px;
+}
+.slugField {
+  display: flex;
+  align-items: center;
+  background: #fff0f5;
+  border-radius: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+.slugField > span {
+  max-width: 52%;
+  padding: 12px 14px;
+  font-size: 12px;
+  background: #f9e8ef;
+  overflow-wrap: anywhere;
+  color: var(--color-muted);
+}
+.slugField input {
+  flex: 1;
+}
+.preview {
+  position: sticky;
+  top: 105px;
+  background: #fff0f5;
+  border-radius: 16px;
+  overflow: hidden;
+  min-width: 0;
+  box-shadow: 0 2px 4px #2b202505;
+}
+.previewImage {
+  height: 176px;
+  position: relative;
+}
+.previewImage img {
+  object-fit: cover;
+}
+.previewContent {
+  padding: 24px;
+}
+.eyebrow {
+  font-size: 11px;
+  color: var(--color-accent);
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.previewContent h2 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 30px;
+  line-height: 1.4;
+  margin: 18px 0;
+  overflow-wrap: anywhere;
+}
+.previewContent > p:not(.eyebrow) {
+  font-size: 15px;
+  color: var(--color-muted);
+  margin: 12px 0;
+}
+.iconLine {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.iconLine svg {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+  color: var(--color-accent);
+}
+.urlPreview {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  color: var(--color-muted);
+  margin-top: 20px;
+}
+.urlPreview strong {
+  color: var(--color-accent);
+  font-weight: 500;
+}
+.previewIntro {
+  max-height: 150px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.mobilePreview {
+  display: none;
+}
+.regional {
+  background: #fff0f5;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--color-muted);
+  display: flex;
+  gap: 10px;
+}
+.regional svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 13px 24px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  text-align: center;
+}
+.primary {
+  background: var(--color-accent);
+  color: white;
+  box-shadow: 0 3px 6px #4b042014;
+}
+.primary:hover:not(:disabled) {
+  background: var(--color-accent-deep);
+}
+.secondary {
+  background: transparent;
+  color: var(--color-accent);
+  border-color: var(--color-border);
+}
+.secondary:hover:not(:disabled) {
+  background: var(--color-soft);
+}
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.textButton {
+  border: 0;
+  background: transparent;
+  padding: 8px 0;
+  font-size: 14px;
+  color: var(--color-accent);
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+.textButton:hover {
+  text-decoration: underline;
+}
+.textButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+}
+.formActions .primary {
+  min-width: 210px;
+}
+.reviewHero {
+  text-align: center;
+  margin-bottom: 40px;
+}
+.reviewHero .steps {
+  justify-content: center;
+}
+.reviewHero h1 {
+  font-size: 40px;
+}
+.review {
+  max-width: 704px;
+  margin: auto;
+}
+.review .sectionHeading h2 {
+  font-size: 24px;
+}
+.review .sectionHeading .textButton {
+  white-space: nowrap;
+}
+.summaryGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 26px 24px;
+  margin: 30px 0 36px;
+}
+.summaryGrid dt {
+  color: var(--color-muted);
+  font-size: 13px;
+  margin-bottom: 7px;
+}
+.summaryGrid dd {
+  margin: 0;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.summaryGrid dd small {
+  display: block;
+  color: var(--color-muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.fullWidth {
+  grid-column: 1/-1;
+}
+.breakText {
+  overflow-wrap: anywhere;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-accent);
+  background: #f7e3ec;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-family: var(--font-body);
+  line-height: 1.6;
+}
+.permanence {
+  background: #fff0f5;
+  border-radius: 12px;
+  padding: 24px;
+}
+.permanence h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 21px;
+}
+.permanence ul {
+  padding-left: 20px;
+  margin: 14px 0 0;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+.permanence li + li {
+  margin-top: 10px;
+}
+.publicNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--color-muted);
+  margin: 24px 0;
+  line-height: 1.7;
+}
+.publicNotice svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.reviewActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.reviewBanner {
+  display: none;
+}
+.notice,
+.error {
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 18px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.notice {
+  background: #fff0f5;
+  color: var(--color-accent-deep);
+}
+.error {
+  background: #fff0ed;
+  color: #982a2c;
+  border: 1px solid #edcbc6;
+}
+.centerCard,
+.success {
+  margin: 25px auto;
+  text-align: center;
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 0 7px 22px #4b04200b;
+  max-width: 512px;
+}
+.centerCard h1,
+.success h1 {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.7px;
+  margin: 20px 0 14px;
+  outline: none;
+}
+.centerCard > p,
+.success > p {
+  color: var(--color-muted);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.emblem,
+.successEmblem {
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  background: #fceaf1;
+  color: var(--color-accent);
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+}
+.emblem svg {
+  width: 28px;
+  height: 28px;
+}
+.emailPill {
+  display: block;
+  background: #fff0f5;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 24px 0;
+  color: var(--color-accent);
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+.stackedActions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 26px 0 18px;
+}
+.centerCard > .primary {
+  margin: 24px auto;
+}
+.success {
+  max-width: 576px;
+  padding: 48px;
+}
+.success h1 {
+  font-size: 40px;
+}
+.successEmblem {
+  width: 76px;
+  height: 76px;
+}
+.successEmblem svg {
+  width: 34px;
+  height: 34px;
+}
+.successSummary {
+  background: #fff0f5;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 28px 0;
+}
+.successSummary h2 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 28px;
+  line-height: 1.4;
+  margin: 15px 0;
+  overflow-wrap: anywhere;
+}
+.successSummary h2 span {
+  font-style: italic;
+}
+.successSummary .iconLine {
+  justify-content: center;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+.ownerRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-top: 1px solid #ebd6df;
+  padding-top: 18px;
+  margin-top: 20px;
+  font-size: 13px;
+}
+.invitePanel {
+  background: #fff0f5;
+  padding: 24px;
+  border-radius: 12px;
+  margin: 24px 0;
+}
+.invitePanel h2 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 500;
+  margin: 10px 0;
+}
+.invitePanel p {
+  font-size: 14px;
+  color: var(--color-muted);
+}
+.dashboard {
+  max-width: 900px;
+  margin: auto;
+}
+.dashboard h1 {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 500;
+  margin: 22px 0;
+}
+.dashboard > p {
+  color: var(--color-muted);
+}
+.weddingCard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin: 30px 0;
+  padding: 32px;
+  background: white;
+  border-radius: 16px;
+}
+.weddingCard h2 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 26px;
+}
+.weddingCard p {
+  margin: 8px 0;
+}
+.teamSection {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  margin-top: 30px;
+  scroll-margin-top: 100px;
+}
+.teamSection h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+.teamSection p {
+  color: var(--color-muted);
+  font-size: 14px;
+}
+.teamForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px auto;
+  gap: 16px;
+  align-items: end;
+  margin-top: 24px;
+}
+.teamForm label {
+  font-size: 14px;
+  display: block;
+  margin-bottom: 7px;
+}
+.teamForm select {
+  appearance: none;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%23681c35' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+.linkActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 15px;
+}
+.shareUrl {
+  font-size: 13px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1100px) {
+  .main {
+    width: calc(100% - 64px);
+  }
+  .setupGrid {
+    gap: 32px;
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+  .formCard {
+    padding: 28px;
+  }
+  .roleGrid {
+    gap: 8px;
+  }
+  .roleCard {
+    padding: 14px 10px;
+  }
+}
+@media (max-width: 900px) {
+  .setupGrid {
+    display: block;
+  }
+  .preview {
+    display: none;
+  }
+  .mobilePreview {
+    display: block;
+    background: #fff0f5;
+    border-radius: 12px;
+    margin-top: 16px;
+  }
+  .mobilePreview .previewContent {
+    padding: 20px;
+  }
+  .mobilePreview .urlPreview {
+    padding: 0;
+    background: transparent;
+  }
+  .hero h1 {
+    max-width: 700px;
+  }
+  .accountEmail {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .header {
+    min-height: 64px;
+  }
+  .headerInner {
+    padding: 16px 20px;
+    gap: 12px;
+  }
+  .brand {
+    font-size: 21px;
+    max-width: 195px;
+    letter-spacing: -0.7px;
+  }
+  .account {
+    gap: 12px;
+  }
+  .account > .textButton {
+    font-size: 14px;
+  }
+  .accountMenu summary {
+    width: 32px;
+    height: 32px;
+  }
+  .main {
+    width: calc(100% - 40px);
+    padding: 34px 0 50px;
+  }
+  .hero {
+    margin-bottom: 28px;
+  }
+  .hero h1,
+  .reviewHero h1 {
+    font-size: 30px;
+    letter-spacing: -0.7px;
+    margin: 24px 0 12px;
+  }
+  .hero > p,
+  .reviewHero > p {
+    font-size: 16px;
+  }
+  .hero .inviteNote {
+    font-size: 14px;
+    padding: 14px 16px;
+    background: #fff0f5;
+    border-radius: 10px;
+    margin-top: 20px;
+  }
+  .steps {
+    gap: 8px;
+    font-size: 12px;
+  }
+  .steps li {
+    gap: 6px;
+  }
+  .steps li:first-child::after {
+    width: 22px;
+    margin-left: 4px;
+  }
+  .steps li > span {
+    width: 24px;
+    height: 24px;
+  }
+  .formCard {
+    padding: 24px;
+    border-radius: 12px;
+  }
+  .formFields {
+    gap: 38px;
+  }
+  .formSection h2,
+  .formSection legend {
+    font-size: 26px;
+  }
+  .fieldGrid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .field input {
+    padding: 12px 14px;
+  }
+  .sectionHeading > span {
+    font-size: 10px;
+  }
+  .roleGrid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .roleCard {
+    flex-direction: row;
+    align-items: center;
+    min-height: 52px;
+    padding: 14px 16px 14px 42px;
+  }
+  .roleCard input {
+    left: 14px;
+    top: 17px;
+  }
+  .roleCard svg {
+    display: none;
+  }
+  .slugField {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 12px;
+    gap: 7px;
+  }
+  .slugField > span {
+    max-width: 100%;
+    padding: 0;
+    background: transparent;
+    font-size: 12px;
+  }
+  .slugField input {
+    background: white;
+  }
+  .regional {
+    font-size: 13px;
+  }
+  .formActions .primary {
+    width: 100%;
+  }
+  .reviewHero {
+    text-align: left;
+    margin-bottom: 26px;
+  }
+  .reviewHero .steps {
+    justify-content: flex-start;
+  }
+  .reviewCard {
+    padding: 24px;
+    border-radius: 12px;
+  }
+  .review .sectionHeading {
+    gap: 10px;
+  }
+  .review .sectionHeading h2 {
+    font-size: 22px;
+  }
+  .review .sectionHeading .textButton {
+    font-size: 14px;
+  }
+  .reviewBanner {
+    display: block;
+    position: relative;
+    height: 125px;
+    margin: -24px -24px 24px;
+    border-radius: 12px 12px 0 0;
+    overflow: hidden;
+  }
+  .reviewBanner img {
+    object-fit: cover;
+  }
+  .summaryGrid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .summaryGrid > div {
+    background: #fff9fb;
+    padding: 12px;
+    border-radius: 8px;
+  }
+  .summaryGrid dd {
+    font-size: 15px;
+  }
+  .reviewActions {
+    flex-direction: column-reverse;
+    gap: 14px;
+  }
+  .reviewActions .primary {
+    width: 100%;
+  }
+  .permanence {
+    padding: 20px;
+  }
+  .centerCard {
+    padding: 30px 24px;
+    margin: 20px auto;
+  }
+  .centerCard h1 {
+    font-size: 30px;
+  }
+  .success {
+    background: transparent;
+    box-shadow: none;
+    padding: 12px 0;
+    margin: 0;
+  }
+  .success h1 {
+    font-size: 32px;
+  }
+  .successSummary {
+    background: white;
+    padding: 24px;
+  }
+  .successSummary h2 {
+    font-size: 27px;
+  }
+  .success > .small {
+    font-size: 13px;
+  }
+  .weddingCard {
+    grid-template-columns: 1fr;
+    padding: 24px;
+  }
+  .dashboard h1 {
+    font-size: 30px;
+  }
+  .teamSection {
+    padding: 24px;
+  }
+  .teamForm {
+    grid-template-columns: 1fr;
+  }
+  .linkActions {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+@media (max-width: 359px) {
+  .headerInner {
+    padding: 14px 16px;
+  }
+  .brand {
+    font-size: 19px;
+    max-width: 150px;
+  }
+  .account {
+    gap: 8px;
+  }
+  .accountMenu summary {
+    width: 28px;
+    height: 28px;
+  }
+  .main {
+    width: calc(100% - 32px);
+  }
+  .formCard,
+  .reviewCard {
+    padding: 20px;
+  }
+  .steps {
+    gap: 6px;
+    font-size: 11px;
+  }
+  .steps li:first-child::after {
+    width: 12px;
+    margin-left: 0;
+  }
+}
+
+.invitationList {
+  margin-top: 28px;
+}
+.invitationList h3 {
+  font-size: 16px;
+  font-weight: 500;
+}
+.invitationRow {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.invitationRow > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.invitationRow strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+}
+.invitationRow span {
+  display: block;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.invitationRow button {
+  white-space: nowrap;
+}

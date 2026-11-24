@@ -20,7 +20,8 @@
     "email:reconcile": "node --conditions=react-server --import tsx scripts/reconcile-identity-email.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:auth-http": "npm run build && vitest run --config vitest.http.config.mts"
+    "test:auth-http": "npm run build && vitest run --config vitest.http.config.mts",
+    "db:migrate:weddings": "node --conditions=react-server --import tsx scripts/migrations/002-weddings.ts"
   },
   "dependencies": {
     "@fastify/csrf": "8.1.1",

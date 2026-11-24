@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   agentRules: false,
   async headers() {
     return [
+      "/",
       "/login",
       "/register",
       "/verify-email",
@@ -12,6 +13,8 @@ const nextConfig: NextConfig = {
       "/forgot-password",
       "/reset-password",
       "/onboarding",
+      "/join/:path*",
+      "/dashboard/:path*",
     ].map((source) => ({
       source,
       headers: [

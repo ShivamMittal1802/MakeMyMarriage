@@ -5,6 +5,7 @@ import {
   AccountButton,
   LandingHeader,
   LandingInteractions,
+  type LandingAccount,
 } from "./landing-controls";
 import { Icon, type IconName } from "./landing-icons";
 import {
@@ -122,9 +123,9 @@ function FeatureCard({
   );
 }
 
-export function LandingPage() {
+export function LandingPage({ account }: { account: LandingAccount }) {
   return (
-    <LandingInteractions>
+    <LandingInteractions account={account}>
       <div id="top" className={styles.page}>
         <a href="#main-content" className={styles.skipLink}>
           Skip to content

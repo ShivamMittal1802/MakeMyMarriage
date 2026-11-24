@@ -68,6 +68,96 @@
 .mobileActions {
   display: none;
 }
+.accountMenu {
+  position: relative;
+  min-width: 0;
+}
+.accountMenu summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px;
+  border-radius: 8px;
+  color: var(--color-accent);
+  cursor: pointer;
+  list-style: none;
+}
+.accountMenu summary::-webkit-details-marker {
+  display: none;
+}
+.accountMenu summary:hover {
+  background: var(--color-soft-deep);
+}
+.accountMenu summary svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.accountEmail {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+.accountPanel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(320px, calc(100vw - 40px));
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-background);
+  box-shadow: 0 10px 30px rgb(39 13 22 / 14%);
+}
+.accountPanel p {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.accountPanel strong {
+  display: block;
+  margin-block: 4px 12px;
+  color: var(--color-text);
+  font-weight: 500;
+}
+.accountPanel a,
+.logoutButton {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  text-decoration: none;
+}
+.accountPanel a:hover,
+.logoutButton:hover {
+  background: var(--color-soft-deep);
+}
+.logoutButton:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.accountError {
+  color: var(--color-accent-deep);
+}
+.mobileAccount {
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border);
+}
+.mobileAccount p {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
 .button {
   min-height: 48px;
   display: inline-flex;
@@ -1202,17 +1292,7 @@
   }
 }
 
-@media (max-width: 767px) {
-  .container {
-    width: calc(100% - 40px);
-  }
-  .headerInner {
-    min-height: 72px;
-    gap: 12px;
-  }
-  .brand {
-    font-size: 1.4375rem;
-  }
+@media (max-width: 1023px) {
   .desktopNav,
   .desktopActions {
     display: none;
@@ -1223,14 +1303,35 @@
     gap: 6px;
   }
   .mobileActions .profileButton {
-    min-height: 34px;
-    width: 34px;
-    padding: 7px;
+    min-height: 44px;
+    width: 44px;
+    padding: 12px;
     border-radius: 50%;
   }
   .profileButton svg {
     height: 18px;
     width: 18px;
+  }
+  .mobileActions .accountMenu summary {
+    width: 44px;
+    justify-content: center;
+  }
+  .mobileActions .accountEmail,
+  .mobileActions .accountMenu summary svg:last-child {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .container {
+    width: calc(100% - 40px);
+  }
+  .headerInner {
+    min-height: 72px;
+    gap: 12px;
+  }
+  .brand {
+    font-size: clamp(1.1rem, 5.5vw, 1.4375rem);
   }
   .hero {
     grid-template-columns: 1fr;
