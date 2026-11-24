@@ -58,7 +58,7 @@ function alreadyMember() {
 function roleTaken() {
   return new AppError(
     409,
-    "ROLE_TAKEN",
+    "ROLE_OCCUPIED",
     "This wedding’s bride or groom role has already been filled. Ask the organiser for a new invitation.",
   );
 }
@@ -118,7 +118,7 @@ function weddingDto(wedding: HydratedDocument<WeddingRecord>): WeddingDto {
     updatedAt: wedding.updatedAt.toISOString(),
   };
 }
-function inviteDto(
+export function inviteDto(
   invite: HydratedDocument<MemberInvitationRecord>,
 ): InviteDto {
   return {
@@ -126,7 +126,10 @@ function inviteDto(
     weddingId: String(invite.weddingId),
     email: invite.emailNormalized,
     role: invite.role as MemberRole,
-    status: invite.status as InviteDto["status"],
+    status:
+      invite.status === "pending" && invite.expiresAt <= new Date()
+        ? "expired"
+        : (invite.status as InviteDto["status"]),
     expiresAt: invite.expiresAt.toISOString(),
     acceptedAt: invite.acceptedAt?.toISOString(),
     version: invite.version,
@@ -163,7 +166,7 @@ export async function weddingForMember(
     throw new AppError(
       403,
       "FORBIDDEN",
-      "Only the owner, bride, or groom can invite the planning team.",
+      "Only the owner, bride, or groom can manage the planning team.",
     );
   if (write) {
     const fenced = await Membership.updateOne(
@@ -280,6 +283,12 @@ export async function createMemberInvitation(
         true,
       );
       const now = new Date();
+      // Serialize new invitations with role changes, removals and acceptance.
+      await Wedding.updateOne(
+        { _id: wedding._id },
+        { $inc: { version: 1 } },
+        { session },
+      );
       await MemberInvitation.updateMany(
         {
           weddingId: wedding._id,
@@ -330,18 +339,6 @@ export async function createMemberInvitation(
       );
     throw error;
   }
-}
-export async function recentMemberInvitations(
-  actor: AccountActor,
-  weddingId: string,
-) {
-  await ensureWeddingDatabase();
-  await weddingForMember(actor, weddingId, undefined, true);
-  return (
-    await MemberInvitation.find({ weddingId: id(weddingId), status: "pending" })
-      .sort({ createdAt: -1, _id: -1 })
-      .limit(25)
-  ).map(inviteDto);
 }
 export async function getMemberInvitation(
   actor: AccountActor,

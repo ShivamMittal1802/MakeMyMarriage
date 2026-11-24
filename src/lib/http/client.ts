@@ -7,7 +7,7 @@ export class ApiClientError extends Error {
     super(message);
   }
 }
-export async function getJson<T>(path: string): Promise<T> {
+export async function getResponse<T>(path: string): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, { cache: "no-store" });
@@ -24,19 +24,26 @@ export async function getJson<T>(path: string): Promise<T> {
       result?.error?.message ?? "We couldn’t confirm the request.",
       result?.error?.details?.fields ?? [],
     );
-  return result.data as T;
+  return result as T;
 }
-export async function postJson<T>(path: string, body: unknown): Promise<T> {
+export async function getJson<T>(path: string): Promise<T> {
+  return (await getResponse<{ data: T }>(path)).data;
+}
+export async function mutateJson<T>(
+  path: string,
+  method: "POST" | "PATCH" | "DELETE",
+  body?: unknown,
+): Promise<T> {
   const csrf = await getJson<{ csrfToken: string }>("/api/v1/csrf");
   let response: Response;
   try {
     response = await fetch(path, {
-      method: "POST",
+      method,
       headers: {
-        "Content-Type": "application/json",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         "X-CSRF-Token": csrf.csrfToken,
       },
-      body: JSON.stringify(body),
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
     throw new ApiClientError(
@@ -44,6 +51,7 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
       "We couldn’t confirm whether the request finished. Check its status before trying again.",
     );
   }
+  if (response.status === 204) return undefined as T;
   const result = await response.json().catch(() => null);
   if (!response.ok || !result)
     throw new ApiClientError(
@@ -53,4 +61,7 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
       result?.error?.details?.fields ?? [],
     );
   return result.data as T;
+}
+export function postJson<T>(path: string, body: unknown): Promise<T> {
+  return mutateJson(path, "POST", body);
 }

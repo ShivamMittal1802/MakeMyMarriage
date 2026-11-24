@@ -255,7 +255,7 @@ export function OnboardingWizard({
           </Link>
           <Link
             className={styles.secondary}
-            href={`/dashboard/${created.id}#planning-team`}
+            href={`/dashboard/${created.id}/team`}
           >
             Invite your planning team
           </Link>

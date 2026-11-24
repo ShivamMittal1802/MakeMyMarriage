@@ -41,6 +41,43 @@ export const invitationExchangeSchema = z.strictObject({
     .regex(/^[A-Za-z0-9_-]{43}$/, "This invitation link is incomplete."),
 });
 export const emptyBodySchema = z.strictObject({});
+export const expectedVersionSchema = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(Number.MAX_SAFE_INTEGER);
+export const memberRolePatchSchema = z.strictObject({
+  expectedVersion: expectedVersionSchema,
+  role: roleSchema,
+});
+export const memberListSchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  cursor: z.string().min(1).max(2048).optional(),
+  status: z.enum(["active", "revoked"]).default("active"),
+});
+export const invitationListSchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  cursor: z.string().min(1).max(2048).optional(),
+  status: z
+    .enum(["pending", "accepted", "revoked", "expired"])
+    .default("pending"),
+});
+export type ListPage<T> = {
+  data: T[];
+  page: { limit: number; nextCursor: string | null; hasMore: boolean };
+};
+export type MemberDto = {
+  id: string;
+  userId: string;
+  name: string;
+  role: MemberRole;
+  isOwner: boolean;
+  status: "active" | "revoked";
+  joinedAt: string;
+  version: number;
+  revokedAt?: string;
+  revokedBy?: string;
+};
 export type WeddingCreate = z.infer<typeof weddingCreateSchema>;
 export type MemberRole = z.infer<typeof roleSchema>;
 export type WeddingDto = {

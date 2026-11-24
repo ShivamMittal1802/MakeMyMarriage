@@ -11,6 +11,7 @@ import { AuthToken, User } from "@/modules/identity/models";
 import { EmailJob } from "@/modules/email/models";
 import { openPayload } from "@/lib/security/crypto";
 import type { IdentityEmailPayload } from "@/lib/providers/resend";
+import { hashPassword } from "@/modules/identity/passwords";
 
 let database: MongoMemoryReplSet;
 let server: ChildProcess;
@@ -22,6 +23,7 @@ async function request(
   path: string,
   body?: URLSearchParams | object,
   auth = false,
+  method?: "PATCH" | "DELETE",
 ) {
   const headers = new Headers({
     origin,
@@ -30,18 +32,20 @@ async function request(
   if (auth) headers.set("X-Auth-Return-Redirect", "1");
   let encoded: string | URLSearchParams | undefined;
   if (body instanceof URLSearchParams) encoded = body;
-  else if (body) {
+  else if (body || method === "DELETE") {
     const csrf = await request("/api/v1/csrf");
     headers.set(
       "cookie",
       Array.from(cookies, ([key, value]) => `${key}=${value}`).join("; "),
     );
     headers.set("X-CSRF-Token", (await csrf.json()).data.csrfToken);
-    headers.set("content-type", "application/json");
-    encoded = JSON.stringify(body);
+    if (body) {
+      headers.set("content-type", "application/json");
+      encoded = JSON.stringify(body);
+    }
   }
   const result = await fetch(`${origin}${path}`, {
-    method: body ? "POST" : "GET",
+    method: method ?? (body ? "POST" : "GET"),
     headers,
     body: encoded,
     redirect: "manual",
@@ -483,4 +487,233 @@ it("creates a wedding and preserves private invitation context through registrat
   expect(formerMemberHome).toContain(invitee);
   expect(formerMemberHome).toContain("Continue setup");
   expect(formerMemberHome).not.toContain(`href="/dashboard/${wedding.id}"`);
+});
+
+it("manages the planning team through scoped, paginated and versioned APIs with owner protection and immediate revocation", async () => {
+  await logout();
+  await login("a different long password");
+  const owner = (await (await request("/api/v1/me")).json()).data;
+  const weddingId = owner.membership.weddingId;
+  const base = `/api/v1/weddings/${weddingId}`;
+  expect((await request(`/dashboard/${weddingId}/team`)).status).toBe(200);
+  const roster = await (await request(`${base}/members`)).json();
+  expect(roster.page).toMatchObject({
+    limit: 25,
+    nextCursor: null,
+    hasMore: false,
+  });
+  expect(JSON.stringify(roster)).not.toMatch(
+    /email|password|sessionVersion|token/,
+  );
+  const ownerMember = roster.data.find(
+    (item: { isOwner: boolean }) => item.isOwner,
+  );
+  expect(
+    (
+      await request(
+        `${base}/members/${ownerMember.id}`,
+        { expectedVersion: ownerMember.version, role: "bride" },
+        false,
+        "PATCH",
+      )
+    ).status,
+  ).toBe(409);
+  expect(
+    (
+      await request(
+        `${base}/members/${ownerMember.id}?expectedVersion=${ownerMember.version}`,
+        undefined,
+        false,
+        "DELETE",
+      )
+    ).status,
+  ).toBe(409);
+  expect((await request(`${base}/members?limit=101`)).status).toBe(422);
+  expect(
+    (await request(`${base}/members?status=active&status=revoked`)).status,
+  ).toBe(422);
+  const helperEmail = "team-admin-http@example.com";
+  await User.create({
+    name: "Planning helper",
+    emailNormalized: helperEmail,
+    passwordHash: await hashPassword("planning helper password"),
+    emailVerifiedAt: new Date(),
+  });
+  const created = await request(`${base}/member-invitations`, {
+    email: helperEmail,
+    role: "manager",
+  });
+  expect(created.status).toBe(201);
+  const invitation = (await created.json()).data;
+  const link = (
+    await (
+      await request(
+        `${base}/member-invitations/${invitation.id}/share-link`,
+        {},
+      )
+    ).json()
+  ).data.url;
+  const token = new URLSearchParams(new URL(link).hash.slice(1)).get("token")!;
+  const hiddenEmail = "private-pending-http@example.com";
+  const pending = (
+    await (
+      await request(`${base}/member-invitations`, {
+        email: hiddenEmail,
+        role: "manager",
+      })
+    ).json()
+  ).data;
+  const privatePage = await (
+    await request(`${base}/member-invitations?limit=1`)
+  ).json();
+  expect(privatePage).toMatchObject({
+    data: expect.any(Array),
+    page: { limit: 1, hasMore: true },
+  });
+  const nextPage = await request(
+    `${base}/member-invitations?limit=1&cursor=${encodeURIComponent(privatePage.page.nextCursor)}`,
+  );
+  expect(nextPage.status).toBe(200);
+  expect(
+    (
+      await request(
+        `${base}/members?limit=1&cursor=${encodeURIComponent(privatePage.page.nextCursor)}`,
+      )
+    ).status,
+  ).toBe(400);
+  expect(
+    (await request(`${base}/member-invitations?cursor=tampered`)).status,
+  ).toBe(400);
+  expect(
+    (await request(`/api/v1/access/member-invitation`, { token })).status,
+  ).toBe(200);
+  await logout();
+  await login("planning helper password", helperEmail);
+  const joined = await request(
+    `/api/v1/member-invitations/${invitation.id}/accept`,
+    {},
+  );
+  expect(joined.status).toBe(200);
+  const member = (await joined.json()).data;
+  const helperPage = await request(`/dashboard/${weddingId}/team`);
+  expect(helperPage.status).toBe(200);
+  const helperHtml = await helperPage.text();
+  expect(helperHtml).toContain("Read-only roster");
+  expect(helperHtml).not.toContain(hiddenEmail);
+  expect(helperHtml).not.toContain("Pending invitations");
+  expect(helperHtml).not.toContain("Invite a member");
+  expect((await request(`${base}/member-invitations`)).status).toBe(403);
+  expect((await request(`${base}/members?status=revoked`)).status).toBe(403);
+  expect(
+    (
+      await request(
+        `${base}/members/${member.id}`,
+        { role: "bride", expectedVersion: member.version },
+        false,
+        "PATCH",
+      )
+    ).status,
+  ).toBe(403);
+  await logout();
+  await login("a different long password");
+  const before = (await (await request(`${base}/members/${member.id}`)).json())
+    .data;
+  const noCsrf = await fetch(`${origin}${base}/members/${member.id}`, {
+    method: "PATCH",
+    headers: {
+      origin,
+      cookie: Array.from(cookies, ([k, v]) => `${k}=${v}`).join("; "),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ role: "bride", expectedVersion: before.version }),
+  });
+  expect(noCsrf.status).toBe(403);
+  const promoted = await request(
+    `${base}/members/${member.id}`,
+    { role: "bride", expectedVersion: before.version },
+    false,
+    "PATCH",
+  );
+  expect(promoted.status).toBe(200);
+  const bride = (await promoted.json()).data;
+  expect(bride.role).toBe("bride");
+  expect(
+    (
+      await request(
+        `${base}/members/${member.id}`,
+        { role: "manager", expectedVersion: before.version },
+        false,
+        "PATCH",
+      )
+    ).status,
+  ).toBe(409);
+  await logout();
+  await login("planning helper password", helperEmail);
+  expect((await request(`${base}/member-invitations`)).status).toBe(200);
+  const demoted = await request(
+    `${base}/members/${member.id}`,
+    { role: "manager", expectedVersion: bride.version },
+    false,
+    "PATCH",
+  );
+  expect(demoted.status).toBe(200);
+  expect((await request(`${base}/member-invitations`)).status).toBe(403);
+  await logout();
+  await login("a different long password");
+  expect(
+    (
+      await request(
+        `${base}/member-invitations/${pending.id}?expectedVersion=${pending.version}`,
+        undefined,
+        false,
+        "DELETE",
+      )
+    ).status,
+  ).toBe(204);
+  const repeatedRevocation = await request(
+    `${base}/member-invitations/${pending.id}?expectedVersion=${pending.version}`,
+    undefined,
+    false,
+    "DELETE",
+  );
+  expect(repeatedRevocation.status).toBe(204);
+  expect(await repeatedRevocation.text()).toBe("");
+  expect((await request(`${base}/member-invitations`)).status).toBe(200);
+  const latest = (await (await request(`${base}/members/${member.id}`)).json())
+    .data;
+  const removed = await request(
+    `${base}/members/${member.id}?expectedVersion=${latest.version}`,
+    undefined,
+    false,
+    "DELETE",
+  );
+  expect(removed.status).toBe(204);
+  expect(await removed.text()).toBe("");
+  const repeatedRemoval = await request(
+    `${base}/members/${member.id}?expectedVersion=${latest.version}`,
+    undefined,
+    false,
+    "DELETE",
+  );
+  expect(repeatedRemoval.status).toBe(204);
+  expect(await repeatedRemoval.text()).toBe("");
+  const history = (
+    await (await request(`${base}/members?status=revoked`)).json()
+  ).data;
+  expect(history).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: member.id,
+        status: "revoked",
+        revokedBy: owner.id,
+      }),
+    ]),
+  );
+  await logout();
+  await login("planning helper password", helperEmail);
+  expect((await request(`${base}/members`)).status).toBe(404);
+  expect((await request(`/dashboard/${weddingId}/team`)).status).toBe(404);
+  expect(
+    (await (await request("/api/v1/me")).json()).data.membership,
+  ).toBeNull();
 });

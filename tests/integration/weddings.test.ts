@@ -40,6 +40,16 @@ import {
 } from "@/modules/weddings/invitation-grants";
 import { weddingCreateSchema } from "@/modules/weddings/schemas";
 import { success } from "@/lib/http/api";
+import { EmailJob, EmailOperation, Usage } from "@/modules/email/models";
+import { sealPayload } from "@/lib/security/crypto";
+import {
+  listMembers,
+  getMember,
+  listMemberInvitations,
+  changeMemberRole,
+  removeMember,
+  revokeMemberInvitation,
+} from "@/modules/weddings/team-service";
 import {
   developmentEmailVerificationEnabled,
   emailVerificationSatisfied,
@@ -384,7 +394,7 @@ describe("private management invitations", () => {
           (result) => result.status === "rejected",
         ) as PromiseRejectedResult
       ).reason.code,
-    ).toBe("ROLE_TAKEN");
+    ).toBe("ROLE_OCCUPIED");
   });
   it("serializes create-versus-join to one active wedding and rolls back losing writes", async () => {
     const owner = await actor("owner@example.com");
@@ -521,5 +531,556 @@ it("does not upgrade a revoked JWT if a reset finishes after Auth.js validated t
   await User.updateOne({ _id: user.id }, { $inc: { sessionVersion: 1 } });
   await expect(currentActor()).rejects.toMatchObject({
     code: "AUTHENTICATION_REQUIRED",
+  });
+});
+
+describe("planning team administration", () => {
+  async function setup(role: "bride" | "groom" | "manager" = "manager") {
+    const owner = await actor("team-owner@example.com");
+    const wedding = await createWedding(owner, details);
+    const helper = await actor("team-helper@example.com");
+    const invitation = await invite(
+      owner,
+      wedding.id,
+      "team-helper@example.com",
+      role,
+    );
+    const member = await acceptMemberInvitation(helper, invitation.grant);
+    return { owner, wedding, helper, invitation, member };
+  }
+  it("paginates active members deterministically without exposing emails, and binds cursors to access/filter/resource", async () => {
+    const { owner, wedding, helper } = await setup();
+    for (let n = 0; n < 3; n++) {
+      const person = await actor(`roster-${n}@example.com`);
+      await Membership.create({
+        weddingId: wedding.id,
+        userId: person.id,
+        role: "manager",
+        joinedAt: new Date("2026-01-01T00:00:00Z"),
+      });
+    }
+    const first = await listMembers(owner, wedding.id, { limit: 2 });
+    expect(first.page).toMatchObject({ limit: 2, hasMore: true });
+    const second = await listMembers(owner, wedding.id, {
+      limit: 2,
+      cursor: first.page.nextCursor,
+    });
+    const third = await listMembers(owner, wedding.id, {
+      limit: 2,
+      cursor: second.page.nextCursor,
+    });
+    const ids = [...first.data, ...second.data, ...third.data].map(
+      (item) => item.id,
+    );
+    expect(new Set(ids).size).toBe(5);
+    expect(third.page).toMatchObject({ hasMore: false, nextCursor: null });
+    expect(JSON.stringify(first)).not.toMatch(
+      /email|password|sessionVersion|ciphertext|token/,
+    );
+    await expect(
+      listMembers(helper, wedding.id, {
+        limit: 2,
+        cursor: first.page.nextCursor,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_CURSOR" });
+    await expect(
+      listMembers(owner, wedding.id, {
+        limit: 2,
+        status: "revoked",
+        cursor: first.page.nextCursor,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_CURSOR" });
+    await expect(
+      listMemberInvitations(owner, wedding.id, {
+        limit: 2,
+        cursor: first.page.nextCursor,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_CURSOR" });
+    await expect(
+      listMembers(owner, wedding.id, { cursor: "tampered" }),
+    ).rejects.toMatchObject({ code: "INVALID_CURSOR" });
+    const other = await actor("other-owner@example.com");
+    const otherWedding = await createWedding(other, {
+      ...details,
+      slug: "other-team",
+    });
+    await expect(listMembers(owner, otherWedding.id)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+  it("keeps pending invitation email lists/admin history private and hides elapsed pending links", async () => {
+    const { owner, wedding, helper, member } = await setup();
+    const expired = await createMemberInvitation(owner, wedding.id, {
+      email: "elapsed@example.com",
+      role: "manager",
+    });
+    await MemberInvitation.updateOne(
+      { _id: expired.id },
+      { $set: { expiresAt: new Date(0) } },
+    );
+    await createMemberInvitation(owner, wedding.id, {
+      email: "pending@example.com",
+      role: "manager",
+    });
+    const page = await listMemberInvitations(owner, wedding.id);
+    expect(page.data.map((item) => item.email)).toEqual([
+      "pending@example.com",
+    ]);
+    const history = await listMemberInvitations(owner, wedding.id, {
+      status: "expired",
+    });
+    expect(history.data[0]).toMatchObject({
+      id: expired.id,
+      status: "expired",
+    });
+    expect(JSON.stringify(page)).not.toMatch(/ciphertext|nonce|token|password/);
+    await expect(
+      listMemberInvitations(helper, wedding.id),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      listMembers(helper, wedding.id, { status: "revoked" }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      changeMemberRole(helper, wedding.id, member.id, {
+        expectedVersion: member.version,
+        role: "bride",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+  it("protects owner membership/role and enforces version/role-slot conflicts", async () => {
+    const { owner, wedding, helper, member } = await setup();
+    const ownerRecord = await Membership.findOne({ userId: owner.id }).orFail();
+    await expect(
+      changeMemberRole(owner, wedding.id, String(ownerRecord._id), {
+        expectedVersion: ownerRecord.version,
+        role: "bride",
+      }),
+    ).rejects.toMatchObject({ code: "OWNER_PROTECTED" });
+    await expect(
+      removeMember(
+        owner,
+        wedding.id,
+        String(ownerRecord._id),
+        ownerRecord.version,
+      ),
+    ).rejects.toMatchObject({ code: "OWNER_PROTECTED" });
+    const changed = await changeMemberRole(owner, wedding.id, member.id, {
+      expectedVersion: member.version,
+      role: "bride",
+    });
+    expect(changed).toMatchObject({ role: "bride", isOwner: false });
+    await expect(
+      changeMemberRole(owner, wedding.id, member.id, {
+        expectedVersion: member.version,
+        role: "manager",
+      }),
+    ).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
+    const next = await actor("second-role@example.com");
+    const nextMembership = await Membership.create({
+      weddingId: wedding.id,
+      userId: next.id,
+      role: "manager",
+    });
+    await expect(
+      changeMemberRole(owner, wedding.id, String(nextMembership._id), {
+        expectedVersion: 0,
+        role: "bride",
+      }),
+    ).rejects.toMatchObject({ code: "ROLE_OCCUPIED" });
+    await expect(
+      removeMember(
+        helper,
+        wedding.id,
+        String(ownerRecord._id),
+        ownerRecord.version,
+      ),
+    ).rejects.toMatchObject({ code: "OWNER_PROTECTED" });
+  });
+  it("handles self-demotion and self-removal using current fenced versions", async () => {
+    const { owner, wedding, helper, member } = await setup("bride");
+    const demoted = await changeMemberRole(helper, wedding.id, member.id, {
+      expectedVersion: member.version,
+      role: "manager",
+    });
+    expect(demoted).toMatchObject({
+      role: "manager",
+      version: member.version + 2,
+    });
+    await expect(
+      createMemberInvitation(helper, wedding.id, {
+        email: "forbidden@example.com",
+        role: "manager",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    const groom = await actor("groom-admin@example.com");
+    const invitation = await invite(
+      owner,
+      wedding.id,
+      "groom-admin@example.com",
+      "groom",
+    );
+    const groomMember = await acceptMemberInvitation(groom, invitation.grant);
+    await removeMember(groom, wedding.id, groomMember.id, groomMember.version);
+    await expect(
+      removeMember(groom, wedding.id, groomMember.id, groomMember.version),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(getWedding(groom, wedding.id)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(await Membership.findById(groomMember.id)).toMatchObject({
+      status: "revoked",
+      revokedBy: new mongoose.Types.ObjectId(groom.id),
+    });
+    await expect(
+      createWedding(groom, { ...details, slug: "groom-next-wedding" }),
+    ).resolves.toHaveProperty("id");
+  });
+  it("removes access, invalidates pending re-entry grants, and rejoins with a fresh historical membership", async () => {
+    const { owner, wedding, helper, member } = await setup();
+    const reentry = await invite(owner, wedding.id, "team-helper@example.com");
+    await removeMember(owner, wedding.id, member.id, member.version);
+    const old = await Membership.findById(member.id).orFail();
+    expect(old).toMatchObject({
+      status: "revoked",
+      revokedBy: new mongoose.Types.ObjectId(owner.id),
+    });
+    expect(old.revokedAt).toBeInstanceOf(Date);
+    await expect(getWedding(helper, wedding.id)).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(
+      acceptMemberInvitation(helper, reentry.grant),
+    ).rejects.toMatchObject({ code: "LINK_UNAVAILABLE" });
+    await expect(exchangeMemberInvitation(reentry.token)).rejects.toMatchObject(
+      { code: "LINK_UNAVAILABLE" },
+    );
+    const replacement = await invite(
+      owner,
+      wedding.id,
+      "team-helper@example.com",
+    );
+    const joined = await acceptMemberInvitation(helper, replacement.grant);
+    expect(joined.id).not.toBe(member.id);
+    expect(await Membership.countDocuments({ userId: helper.id })).toBe(2);
+    expect((await listMembers(owner, wedding.id)).data).toHaveLength(2);
+    expect(
+      (await listMembers(owner, wedding.id, { status: "revoked" })).data[0],
+    ).toHaveProperty("revokedBy", owner.id);
+    await expect(
+      getMember(helper, wedding.id, member.id),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+  it("revokes invitations with version checks and preserves accepted memberships", async () => {
+    const { owner, wedding, helper, invitation, member } = await setup();
+    await expect(
+      revokeMemberInvitation(
+        owner,
+        wedding.id,
+        invitation.record.id,
+        invitation.record.version,
+      ),
+    ).rejects.toMatchObject({ code: "INVITATION_ACCEPTED" });
+    expect((await getMember(owner, wedding.id, member.id)).status).toBe(
+      "active",
+    );
+    const pending = await invite(owner, wedding.id, "revoke@example.com");
+    await expect(
+      revokeMemberInvitation(owner, wedding.id, pending.record.id, 50),
+    ).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
+    await expect(
+      revokeMemberInvitation(helper, wedding.id, pending.record.id, 0),
+    ).rejects.toMatchObject({ status: 403 });
+    await revokeMemberInvitation(
+      owner,
+      wedding.id,
+      pending.record.id,
+      pending.record.version,
+    );
+    await expect(exchangeMemberInvitation(pending.token)).rejects.toMatchObject(
+      { code: "LINK_UNAVAILABLE" },
+    );
+    const candidate = await actor("revoke@example.com");
+    await expect(
+      acceptMemberInvitation(candidate, pending.grant),
+    ).rejects.toMatchObject({ code: "LINK_UNAVAILABLE" });
+  });
+  it("repeats member removal without changing history or removing a fresh membership", async () => {
+    const { owner, wedding, helper, member } = await setup();
+    await expect(
+      removeMember(owner, wedding.id, member.id, member.version + 1),
+    ).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
+    await removeMember(owner, wedding.id, member.id, member.version);
+    const removed = await Membership.findById(member.id).lean().orFail();
+    const replacement = await invite(
+      owner,
+      wedding.id,
+      "team-helper@example.com",
+    );
+    const rejoined = await acceptMemberInvitation(helper, replacement.grant);
+
+    await expect(
+      removeMember(owner, wedding.id, member.id, member.version),
+    ).resolves.toBeUndefined();
+    expect(await Membership.findById(member.id).lean()).toEqual(removed);
+    expect((await getMember(owner, wedding.id, rejoined.id)).status).toBe(
+      "active",
+    );
+    await expect(
+      changeMemberRole(owner, wedding.id, member.id, {
+        expectedVersion: removed.version,
+        role: "bride",
+      }),
+    ).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
+    await expect(
+      removeMember(helper, wedding.id, member.id, member.version),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const other = await actor("delete-other@example.com");
+    const otherWedding = await createWedding(other, {
+      ...details,
+      slug: "delete-other-wedding",
+    });
+    await expect(
+      removeMember(other, otherWedding.id, member.id, member.version),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+  it("repeats invitation revocation without revoking a replacement or bypassing access checks", async () => {
+    const { owner, wedding, helper } = await setup();
+    const original = await invite(
+      owner,
+      wedding.id,
+      "repeat-revoke@example.com",
+    );
+    await revokeMemberInvitation(
+      owner,
+      wedding.id,
+      original.record.id,
+      original.record.version,
+    );
+    const revoked = await MemberInvitation.findById(original.record.id)
+      .lean()
+      .orFail();
+    const replacement = await invite(
+      owner,
+      wedding.id,
+      "repeat-revoke@example.com",
+    );
+
+    await expect(
+      revokeMemberInvitation(
+        owner,
+        wedding.id,
+        original.record.id,
+        original.record.version,
+      ),
+    ).resolves.toBeUndefined();
+    expect(await MemberInvitation.findById(original.record.id).lean()).toEqual(
+      revoked,
+    );
+    expect(
+      (await MemberInvitation.findById(replacement.record.id))?.status,
+    ).toBe("pending");
+    await expect(
+      exchangeMemberInvitation(replacement.token),
+    ).resolves.toHaveProperty("context");
+    await expect(
+      revokeMemberInvitation(
+        helper,
+        wedding.id,
+        original.record.id,
+        original.record.version,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const other = await actor("revoke-other@example.com");
+    const otherWedding = await createWedding(other, {
+      ...details,
+      slug: "revoke-other-wedding",
+    });
+    await expect(
+      revokeMemberInvitation(
+        other,
+        otherWedding.id,
+        original.record.id,
+        original.record.version,
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+  async function mailFixture(
+    weddingId: string,
+    invitationId: string,
+    dispatchStarted = false,
+    missingQuota = false,
+  ) {
+    const operation = await EmailOperation.create({
+      scopeKey: `wedding:${weddingId}`,
+      weddingId,
+      kind: "memberInvitation",
+      mode: "live",
+      requestKey: String(new mongoose.Types.ObjectId()),
+      requestHash: "fixture",
+      status: "open",
+      expectedJobs: 2,
+    });
+    if (!missingQuota)
+      for (const [key, kind] of [
+        ["day", "emailDay"],
+        ["month", "emailMonth"],
+      ] as const) {
+        await Usage.create({
+          _id: key,
+          kind,
+          windowStart: new Date(0),
+          windowEnd: new Date("2099-01-01"),
+          limit: 100,
+          reserved: dispatchStarted ? 0 : 1,
+          held: dispatchStarted ? 1 : 0,
+        });
+      }
+    const job = await EmailJob.create({
+      operationId: operation._id,
+      scopeKey: operation.scopeKey,
+      weddingId,
+      subjectType: "memberInvitation",
+      subjectId: invitationId,
+      subjectKey: `memberInvitation:${invitationId}`,
+      intendedRecipient: "fixture@example.com",
+      actualRecipient: "fixture@example.com",
+      kind: "memberInvitation",
+      mode: "live",
+      payloadCipher: sealPayload({ text: "isolated fixture" }, "fixture"),
+      payloadHash: "fixture",
+      idempotencyKey: String(new mongoose.Types.ObjectId()),
+      state: dispatchStarted ? "needsReview" : "processing",
+      quota: {
+        dayId: "day",
+        monthId: "month",
+        state: dispatchStarted ? "held" : "reserved",
+      },
+      ...(dispatchStarted ? { dispatchStartedAt: new Date() } : {}),
+    });
+    return { job, operation };
+  }
+  it("cancels undispatched invitation jobs, releases only definite reservations and preserves unrelated recipients", async () => {
+    const { owner, wedding } = await setup();
+    const pending = await invite(owner, wedding.id, "queued@example.com");
+    const { job, operation } = await mailFixture(wedding.id, pending.record.id);
+    const other = await invite(owner, wedding.id, "unrelated@example.com");
+    const neighbor = await EmailJob.create({
+      ...job.toObject(),
+      _id: new mongoose.Types.ObjectId(),
+      subjectId: other.record.id,
+      subjectKey: `memberInvitation:${other.record.id}`,
+      idempotencyKey: "other-fixture",
+      quota: undefined,
+      state: "pending",
+    });
+    await revokeMemberInvitation(
+      owner,
+      wedding.id,
+      pending.record.id,
+      pending.record.version,
+    );
+    expect(await EmailJob.findById(job._id)).toMatchObject({
+      state: "cancelled",
+      quota: { state: "released" },
+    });
+    expect((await Usage.findById("day"))?.reserved).toBe(0);
+    expect((await EmailJob.findById(neighbor._id))?.state).toBe("pending");
+    expect((await EmailOperation.findById(operation._id))?.status).toBe("open");
+  });
+  it("retains ambiguous dispatch holds and rolls removal back if quota cleanup fails", async () => {
+    const { owner, wedding, member } = await setup();
+    const pending = await invite(owner, wedding.id, "held@example.com");
+    const { job } = await mailFixture(wedding.id, pending.record.id, true);
+    await revokeMemberInvitation(
+      owner,
+      wedding.id,
+      pending.record.id,
+      pending.record.version,
+    );
+    expect(await EmailJob.findById(job._id)).toMatchObject({
+      state: "needsReview",
+      quota: { state: "held" },
+      cancelReason: "invitationRevoked",
+    });
+    expect((await Usage.findById("day"))?.held).toBe(1);
+    await Usage.deleteMany({});
+    const reentry = await invite(owner, wedding.id, "team-helper@example.com");
+    await mailFixture(wedding.id, reentry.record.id, false, true);
+    await expect(
+      removeMember(owner, wedding.id, member.id, member.version),
+    ).rejects.toThrow("Email quota accounting conflict");
+    expect((await Membership.findById(member.id))?.status).toBe("active");
+    expect((await MemberInvitation.findById(reentry.record.id))?.status).toBe(
+      "pending",
+    );
+    await expect(
+      exchangeMemberInvitation(reentry.token),
+    ).resolves.toHaveProperty("context");
+  });
+  it("serializes competing role assignments and acceptance versus revocation", async () => {
+    const { owner, wedding, helper, member } = await setup();
+    const second = await actor("race-role@example.com");
+    const secondMember = await Membership.create({
+      weddingId: wedding.id,
+      userId: second.id,
+      role: "manager",
+    });
+    const roles = await Promise.allSettled([
+      changeMemberRole(owner, wedding.id, member.id, {
+        expectedVersion: member.version,
+        role: "bride",
+      }),
+      changeMemberRole(owner, wedding.id, String(secondMember._id), {
+        expectedVersion: 0,
+        role: "bride",
+      }),
+    ]);
+    expect(
+      roles.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      await Membership.countDocuments({
+        weddingId: wedding.id,
+        role: "bride",
+        status: "active",
+      }),
+    ).toBe(1);
+    const candidate = await actor("race-invite@example.com");
+    const pending = await invite(owner, wedding.id, "race-invite@example.com");
+    const outcomes = await Promise.allSettled([
+      acceptMemberInvitation(candidate, pending.grant),
+      revokeMemberInvitation(
+        owner,
+        wedding.id,
+        pending.record.id,
+        pending.record.version,
+      ),
+    ]);
+    expect(
+      outcomes.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    const record = await MemberInvitation.findById(pending.record.id).orFail();
+    expect(
+      await Membership.countDocuments({
+        userId: candidate.id,
+        status: "active",
+      }),
+    ).toBe(record.status === "accepted" ? 1 : 0);
+    // A manager may never perform administration after another actor changes their access.
+    if ((await getMember(owner, wedding.id, member.id)).role === "bride") {
+      const latest = await getMember(owner, wedding.id, member.id);
+      await changeMemberRole(owner, wedding.id, member.id, {
+        expectedVersion: latest.version,
+        role: "manager",
+      });
+    }
+    await expect(
+      createMemberInvitation(helper, wedding.id, {
+        email: "after-demotion@example.com",
+        role: "manager",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
   });
 });

@@ -1,15 +1,11 @@
 import { redirect, notFound } from "next/navigation";
+import Link from "next/link";
 import { currentAccount } from "@/lib/access/account";
 import { emailVerificationSatisfied } from "@/lib/access/email-verification";
 import { AppError } from "@/lib/http/errors";
-import {
-  getWedding,
-  weddingForMember,
-  recentMemberInvitations,
-} from "@/modules/weddings/service";
+import { getWedding, weddingForMember } from "@/modules/weddings/service";
 import { OnboardingShell } from "@/modules/weddings/components/onboarding-shell";
 import { SetupUnavailable } from "@/modules/weddings/components/onboarding-controls";
-import { PlanningTeam } from "@/modules/weddings/components/planning-team";
 import { roleLabels, displayDate } from "@/modules/weddings/format";
 import styles from "@/modules/weddings/components/onboarding.module.css";
 export const metadata = { title: "Your wedding" };
@@ -26,15 +22,10 @@ export default async function Page({
     id: String(account._id),
     sessionVersion: account.sessionVersion,
   };
-  let wedding, access, invitations;
+  let wedding, access;
   try {
     wedding = await getWedding(actor, weddingId);
     access = await weddingForMember(actor, weddingId);
-    const admin =
-      access.isOwner || ["bride", "groom"].includes(access.membership.role);
-    invitations = admin
-      ? await recentMemberInvitations(actor, weddingId)
-      : null;
   } catch (error) {
     if (error instanceof AppError && error.status === 503)
       return (
@@ -80,13 +71,19 @@ export default async function Page({
           guest invitations, expenses, the public website, and photos will be
           added in the next development steps.
         </p>
-        {invitations ? (
-          <PlanningTeam weddingId={wedding.id} invitations={invitations} />
-        ) : (
-          <p className={styles.notice}>
-            The owner, bride, and groom can invite people to the planning team.
+        <section id="planning-team" className={styles.teamSection}>
+          <h2>Bring your people into the planning.</h2>
+          <p>
+            View your planning team. The owner, bride, and groom can invite
+            people and manage membership.
           </p>
-        )}
+          <Link
+            className={styles.primary}
+            href={`/dashboard/${wedding.id}/team`}
+          >
+            Open planning team
+          </Link>
+        </section>
       </section>
     </OnboardingShell>
   );
