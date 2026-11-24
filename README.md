@@ -6,9 +6,9 @@ A portfolio wedding-management application built as a modular monolith with Next
 
 See the [development progress tracker](docs/development-progress.md) for feature status, open issues, verification, and the work log. Repository agent instructions in [AGENTS.md](AGENTS.md) require updates alongside future features and bug fixes.
 
-The responsive landing page is implemented from the desktop and mobile Stitch designs. It includes section navigation, a mobile menu, accessible FAQs, and temporary account-action messages. Dashboard, guest, expense, gallery, and livestream previews are fictional illustrations. Authentication, database persistence, business APIs, email delivery, photo uploads, and full dashboard screens are not implemented yet.
+The landing page links to working registration and login routes. Identity includes Argon2id passwords, Auth.js credentials/JWT sessions, explicit email verification, password recovery, session invalidation, and a protected account entry page. Wedding setup and membership are next; the landing dashboard and feature previews remain fictional illustrations.
 
-The landing page uses local assets and makes no database, email, storage, or Stitch requests. Create-wedding and login buttons explain that account access is coming next. Privacy and Terms links will be added when their content is ready.
+Public pages build and run without external configuration. Account fields remain editable when configuration is missing; submission stays disabled with an explanatory notice until the required server settings exist. No Atlas database, Resend inbox, or deployment has been configured or verified by this implementation. Simulated email persists encrypted messages without sending them or proving email ownership.
 
 ## Local setup
 
@@ -38,17 +38,21 @@ Tooling caveat: npm marks ESLint 9 as deprecated, but the current Next.js React/
 
 ## Commands
 
-| Command                | Purpose                                             |
-| ---------------------- | --------------------------------------------------- |
-| `npm run dev`          | Start the local development server                  |
-| `npm run build`        | Create a production build                           |
-| `npm run start`        | Serve the existing production build                 |
-| `npm run lint`         | Run Next.js/React/TypeScript ESLint rules           |
-| `npm run lint:fix`     | Apply available lint fixes                          |
-| `npm run typecheck`    | Generate Next.js route types, then check TypeScript |
-| `npm run format:check` | Check formatting                                    |
-| `npm run format`       | Format application and configuration files          |
-| `npm run check`        | Run lint, formatting checks, and type checking      |
+| Command                   | Purpose                                                            |
+| ------------------------- | ------------------------------------------------------------------ |
+| `npm run dev`             | Start the local development server                                 |
+| `npm run build`           | Create a production build                                          |
+| `npm run start`           | Serve the existing production build                                |
+| `npm run lint`            | Run Next.js/React/TypeScript ESLint rules                          |
+| `npm run lint:fix`        | Apply available lint fixes                                         |
+| `npm run typecheck`       | Generate Next.js route types, then check TypeScript                |
+| `npm run format:check`    | Check formatting                                                   |
+| `npm run format`          | Format application and configuration files                         |
+| `npm run check`           | Run lint, formatting checks, and type checking                     |
+| `npm run db:migrate`      | Apply additive identity collections/indexes/validators             |
+| `npm run email:reconcile` | Reconcile at most 100 interrupted/stale identity jobs; never sends |
+| `npm test`                | Run isolated MongoDB integration and security tests                |
+| `npm run test:auth-http`  | Build and verify the production Auth.js HTTP/cookie lifecycle      |
 
 Run `npm run check` and `npm run build` before submitting changes. Linting runs separately from the production build. The existing `docs/` directory is excluded from formatting to preserve the implementation contracts.
 
@@ -66,11 +70,11 @@ src/components/landing/    Landing content, previews, client controls, and CSS M
 
 TypeScript uses strict mode and the `@/*` alias for `src/*`. Component styles use CSS Modules, with global CSS variables for shared design tokens. Inter and Playfair Display are self-hosted through `next/font/local`; their SIL Open Font License files are included beside them. No remote font or Stitch credential is needed at build time or in the browser.
 
-Most landing content renders on the server. Only the mobile navigation and account notices use client-side React. Native dialogs supply modal focus handling and Escape dismissal; native details/summary elements supply keyboard-accessible FAQs. The copy follows the implementation contracts, including individual guest invitations, one owner, manual email reminders, separate photo grants, and individual original downloads.
+Most landing content renders on the server. Only interactive controls use client-side React. The mobile navigation dialog supplies modal focus handling and Escape dismissal; native details/summary elements supply keyboard-accessible FAQs. The copy follows the implementation contracts, including individual guest invitations, one owner, manual email reminders, separate photo grants, and individual original downloads.
 
 Add folders only when implementing their features:
 
-- `src/app/(public)`, `(auth)`, `(portal)`, and `(guest)` for page/layout boundaries. Onboarding needs an account; dashboard access additionally needs current membership.
+- Future `(public)` and `(guest)` route groups complement the implemented `(auth)` and `(portal)` pages. Onboarding needs an account; dashboard access additionally needs current membership.
 - `src/app/api/v1/` for application Route Handlers, following the API document. Auth.js owns `src/app/api/auth/[...nextauth]/route.ts` separately.
 - `src/modules/identity`, `weddings`, `events`, `guests`, `email`, `expenses`, and `gallery` for feature services, models, validation schemas, DTOs/types, and feature components. Membership belongs with weddings; RSVP belongs with guests.
 - `src/components/ui/` and `src/components/layout/` for reusable interface elements.
@@ -83,13 +87,31 @@ Keep Route Handlers thin. Server-rendered pages and HTTP handlers call the same 
 
 ## Configuration and secrets
 
-`.env.example` documents proposed future server configuration. When integrations are implemented, copy it to ignored `.env.local` and supply only the values required for that feature. Do not commit `.env.local` or real credentials. On Vercel, configure environment variables separately for development, preview, and production.
+Copy `.env.example` to ignored `.env.local`, then fill the settings needed for identity. Never put real credentials in the example. Use separate development, preview, and production databases. Run `npm run db:migrate` explicitly against the intended database before using accounts; requests check required validators, validation enforcement, and index definitions and do not silently create them. An incomplete migration fails closed. The MongoDB deployment must support transactions (Atlas or a replica set), and the migration identity needs collection/index/validator permissions. The additive migration can be run again; it never drops data or indexes.
 
-The scaffold does not consume these variables or implement configuration validation yet. Blank integration settings do not make a working service. Add service-specific validation when implementing each integration, and return the contract's `SERVICE_NOT_CONFIGURED` error if an invoked service is unavailable. Do not connect to providers during module imports or application builds.
+Required for login: `APP_ORIGIN`, `MONGODB_URI`, `MONGODB_DB_NAME`, and a random `AUTH_SECRET` of at least 32 characters. Registration and email requests additionally require `TOKEN_ENCRYPTION_KEY` (32 random bytes encoded as base64), `TOKEN_ENCRYPTION_KEY_ID`, and valid email settings. Generate the secret and encryption key independently in a password manager or local secret generator and save them directly in the ignored environment file. Keep the encryption key stable; replacing it makes existing encrypted messages unreadable. Back it up securely; key rotation with multiple retained keys is not implemented.
 
-Mark future configuration, authentication, database, provider, and business-service modules with `server-only`. Secrets must never use `NEXT_PUBLIC_` prefixes, enter client props, or appear in logs. Keep application origin handling and Auth.js deployment settings consistent with the selected Auth.js version.
+`APP_ORIGIN` must exactly match the browser origin, including the port. Use `http://localhost:3000` consistently in local development, or set it to `http://127.0.0.1:3000` if that is how you open the app. Production/preview require HTTPS and a trusted deployment host. Auth.js uses secure cookies for HTTPS. Its verified compatible release is pinned at `5.0.0-beta.32`; upgrading this beta requires repeating the HTTP/session tests. Do not add an adapter or a second login endpoint.
 
-The intended email modes are `simulated`, `test`, and `live`. Simulated mode makes no provider calls; test mode sends only to the controlled Resend account email and never counts as live guest delivery or proof of another person's email ownership. Verify provider allowance/reset semantics before configuring real sends. Live email requires a verified sender domain.
+All configuration, database, security, authentication, provider, and business-service modules are server-only. Secrets never use `NEXT_PUBLIC_`, enter client props, or appear in application logs. Configuration validates lazily: public rendering/builds do not connect to services. An invoked missing integration returns a safe `SERVICE_NOT_CONFIGURED` response. Unavailable services never trigger an authentication bypass.
+
+Email modes:
+
+- `simulated` (default): encrypt and persist the intended message, with no provider calls or quota usage. It does **not** deliver a usable link to a user or verify the account. There is no public token-preview endpoint or console output of links.
+- `test`: set `RESEND_API_KEY`, a controlled `EMAIL_TEST_RECIPIENT`, and the quota settings below. A verification/reset challenge is eligible only when its intended recipient exactly matches that controlled address; it is never redirected from someone else's account. Subjects are labelled `[TEST]`.
+- `live`: additionally set `EMAIL_FROM` to a sender on a verified domain. Real delivery still requires provider/inbox validation. Keep Resend SDK debug logging disabled (`RESEND_DEBUG` unset) to avoid logging provider diagnostics.
+
+Real sends require `EMAIL_QUOTA_NAMESPACE`, `EMAIL_DAILY_LIMIT` (at most 100), `EMAIL_MONTHLY_LIMIT`, and ISO `EMAIL_MONTH_WINDOW_START`/`EMAIL_MONTH_WINDOW_END` containing the current time and matching the provider allowance window. Daily windows use UTC. Update the monthly window when it rolls over; sending fails closed outside it. Deployments sharing a provider account must share the same accounting database/namespace or receive explicit sub-budgets. Out-of-band sends must be reflected before application sending is enabled.
+
+Every eligible request persists a single-recipient operation/job and makes one bounded attempt. There are no workers or automatic retries. A new explicit verification/recovery request replaces old challenges and tries a new message. Quota exhaustion keeps a generic acknowledgement. Unknown provider outcomes retain held quota and never automatically resend. New quota-window claims also hold capacity for older in-flight/unknown sends and for acceptances settled after the reset; the `carryHeld` portion of `held` is refreshed transactionally before any new reservation. Original-window accounting is preserved. Pending pre-dispatch claims are counted conservatively until they are cancelled or resolved. `npm run email:reconcile` cancels interrupted pre-dispatch jobs and turns expired post-dispatch leases into `needsReview`, holding both allowances. It never releases an ambiguous send: investigate provider records before any manual accounting correction. General email-operation continuation and operator resolution UI are later email-module work.
+
+Verification links expire after 24 hours and reset links after 30 minutes. Their secret lives in a URL fragment, is removed from the address bar, and is consumed only on explicit POST. Refreshing after that removal requires reopening the original email. Password reset increments the database session generation and revokes previous sessions and outstanding challenges. Unverified users may log in; creating/joining a wedding will require verification in the next feature.
+
+## Authentication verification
+
+`npm test` uses a disposable local replica set via `mongodb-memory-server-core`; it never uses the configured Atlas URI or contacts Resend. It may download a MongoDB test binary on first run. To use an installed binary instead, set `MONGOMS_SYSTEM_BINARY` and the matching `MONGOMS_VERSION` (the implementation was tested with MongoDB 6.0.10). Local socket/process permissions are required. The test database is removed after the suite.
+
+`npm run test:auth-http` first builds, then starts an isolated production server on a free loopback port. It verifies real Auth.js cookies, wrong-password handling, protected redirects, `/api/v1/me`, explicit verification, reset session revocation, and logout, including during an actual temporary database outage and exhausted login limits. JWT sign-out and Auth.js CSRF bootstrap do not depend on MongoDB availability. It is an HTTP integration test, not a browser test. Remaining manual acceptance: configured Atlas, delivery to a controlled Resend inbox, mobile layouts, keyboard/form interaction, and URL-fragment behavior in the browser. Desktop login rendering and the honest unconfigured state have been inspected.
 
 The email allowance and 8,000,000,000-byte photo budget are shared across all weddings. Isolated preview databases do not create additional provider allowances: use shared accounting or explicitly allocated sub-budgets. Photos remain private in R2, with a 20,000,000-byte original limit and separate upload/view grants.
 
@@ -106,14 +128,14 @@ The API's `/api/v1` paths supersede the architecture's illustrative paths. The d
 
 ## Next development steps
 
-1. Identity configuration, MongoDB connection/models/indexes, validation, CSRF/error conventions, Argon2id passwords, and Auth.js credentials/JWT sessions. Verify Auth.js release-channel compatibility before installation. Implement verification/recovery with minimal durable email/quota support.
+1. Complete configured Atlas/controlled-inbox and browser acceptance for identity. The code and isolated transaction/HTTP tests are implemented; external delivery is not yet verified.
 2. Transactional wedding creation and membership, owner protection, roles, removal/rejoining, and cross-wedding access tests. Wedding creation also creates the two required gallery-access records.
 3. Wedding details, events, public projections, and the initial dashboard.
 4. Guests, event invitations, scoped RSVP grants, durable email operations, and manual continuation.
 5. Expenses, payment-date rules, totals, soft deletion, and concurrent-edit handling.
 6. Private photos, storage accounting, previews, original downloads, cleanup, QR codes, livestream settings, and acceptance verification.
 
-Verify landing-page navigation, mobile-menu dismissal, account notices, FAQ keyboard access, reduced-motion behavior, image loading, and narrow-screen layout during browser QA. Add automated domain tests as business behavior appears; avoid file-existence tests. MongoDB integration tests must exercise indexes and transactions, not just mocked model calls.
+Verify landing-page navigation, mobile-menu dismissal, account navigation, FAQ keyboard access, reduced-motion behavior, image loading, and narrow-screen layout during browser QA. Add automated domain tests as business behavior appears; avoid file-existence tests. MongoDB integration tests must exercise indexes and transactions, not just mocked model calls.
 
 ## Deployment
 

@@ -1,69 +1,13 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useId,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useId, useRef, type ReactNode } from "react";
+import Link from "next/link";
 import { Icon } from "./landing-icons";
 import styles from "./landing.module.css";
 
 type AccountAction = "create" | "login";
-const AccountContext = createContext<((action: AccountAction) => void) | null>(
-  null,
-);
-
 export function LandingInteractions({ children }: { children: ReactNode }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-  const descriptionId = useId();
-  const [action, setAction] = useState<AccountAction>("create");
-  function openAccountNotice(nextAction: AccountAction) {
-    setAction(nextAction);
-    dialog.current?.showModal();
-  }
-  return (
-    <AccountContext value={openAccountNotice}>
-      {children}
-      <dialog
-        ref={dialog}
-        className={styles.accountDialog}
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) event.currentTarget.close();
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") event.currentTarget.close();
-        }}
-      >
-        <form method="dialog">
-          <button className={styles.dialogClose} aria-label="Close message">
-            <Icon name="close" />
-          </button>
-          <span className={styles.dialogEmblem}>
-            <Icon name="heart" />
-          </span>
-          <p className={styles.eyebrow}>Something lovely is on its way</p>
-          <h2 id={titleId}>
-            {action === "create"
-              ? "Your wedding starts here. Soon."
-              : "We’ll be ready to welcome you soon."}
-          </h2>
-          <p id={descriptionId}>
-            Account creation and sign-in are coming next. For now, explore how
-            Make My Marriage will bring your wedding plans together.
-          </p>
-          <button className={`${styles.button} ${styles.primary}`}>
-            Keep exploring
-          </button>
-        </form>
-      </dialog>
-    </AccountContext>
-  );
+  return children;
 }
 
 export function AccountButton({
@@ -79,16 +23,14 @@ export function AccountButton({
   className?: string;
   label?: string;
 }) {
-  const open = useContext(AccountContext);
   return (
-    <button
-      type="button"
+    <Link
+      href={action === "login" ? "/login" : "/register"}
       className={`${styles.button} ${styles[variant]} ${className}`}
-      onClick={() => open?.(action)}
       aria-label={label}
     >
       {children}
-    </button>
+    </Link>
   );
 }
 
@@ -101,11 +43,6 @@ const navigation = [
 export function LandingHeader() {
   const menu = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-  const openAccount = useContext(AccountContext);
-  function accountFromMenu(action: AccountAction) {
-    menu.current?.close();
-    openAccount?.(action);
-  }
   return (
     <header className={styles.header}>
       <div className={`${styles.container} ${styles.headerInner}`}>
@@ -182,17 +119,17 @@ export function LandingHeader() {
               {item.label}
             </a>
           ))}
-          <button type="button" onClick={() => accountFromMenu("login")}>
+          <Link href="/login" onClick={() => menu.current?.close()}>
             Log in
-          </button>
+          </Link>
         </nav>
-        <button
-          type="button"
+        <Link
+          href="/register"
           className={`${styles.button} ${styles.primary} ${styles.menuCta}`}
-          onClick={() => accountFromMenu("create")}
+          onClick={() => menu.current?.close()}
         >
           Create your wedding
-        </button>
+        </Link>
       </dialog>
     </header>
   );
