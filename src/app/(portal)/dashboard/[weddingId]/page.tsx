@@ -92,6 +92,15 @@ export default async function Page({
             Open event schedule
           </Link>
         </section>
+        <section className={styles.teamSection}>
+          <h2>Wedding guests</h2>
+          <Link
+            className={styles.primary}
+            href={`/dashboard/${wedding.id}/guests`}
+          >
+            Open guest directory
+          </Link>
+        </section>
         <section id="planning-team" className={styles.teamSection}>
           <h2>Bring your people into the planning.</h2>
           <p>

@@ -21,6 +21,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:auth-http": "npm run build && vitest run --config vitest.http.config.mts",
+    "db:migrate:guests": "node --conditions=react-server --import tsx scripts/migrations/004-guests.ts",
     "db:migrate:events": "node --conditions=react-server --import tsx scripts/migrations/003-events.ts",
     "db:migrate:weddings": "node --conditions=react-server --import tsx scripts/migrations/002-weddings.ts"
   },

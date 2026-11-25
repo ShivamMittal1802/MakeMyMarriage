@@ -10,10 +10,12 @@ export async function cancelInvitationJobs(
   session: ClientSession,
   now: Date,
   subjectType: "memberInvitation" | "eventInvitation" = "memberInvitation",
+  reason?: "guestDeleted" | "uninvited" | "contactChanged",
 ) {
   if (!invitationIds.length) return;
   const cancelReason =
-    subjectType === "eventInvitation" ? "eventDeleted" : "invitationRevoked";
+    reason ??
+    (subjectType === "eventInvitation" ? "eventDeleted" : "invitationRevoked");
   const jobs = await EmailJob.find({
     weddingId,
     subjectType,

@@ -1,6 +1,7 @@
 "use client";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { ApiClientError, getResponse, mutateJson } from "@/lib/http/client";
 import type { ListPage } from "@/modules/weddings/schemas";
 import type { ScheduleEvent } from "./schema";
@@ -25,12 +26,7 @@ export function Schedule({
     [removing, setRemoving] = useState<ScheduleEvent | null>(null),
     [deleteError, setDeleteError] = useState(""),
     [stale, setStale] = useState(false);
-  const dialog = useRef<HTMLDialogElement>(null),
-    heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    if (removing) dialog.current?.showModal();
-    else dialog.current?.close();
-  }, [removing]);
+  const heading = useRef<HTMLHeadingElement>(null);
   async function load(cursor?: string) {
     setBusy(true);
     setError("");
@@ -226,18 +222,20 @@ export function Schedule({
           )}
         </>
       )}
-      <dialog
-        ref={dialog}
-        className={s.dialog}
-        aria-labelledby="delete-title"
-        onCancel={(e) => {
-          e.preventDefault();
-          if (!busy) closeDialog();
-        }}
+      <ConfirmDialog
+        open={!!removing}
+        title={`Delete ${removing?.name}?`}
+        error={deleteError}
+        busy={busy}
+        blocked={stale}
+        keep={stale ? "Review schedule" : "Keep event"}
+        confirm={busy ? "Deleting…" : "Delete event"}
+        onClose={closeDialog}
+        onConfirm={remove}
       >
         {removing && (
           <>
-            <h2 id="delete-title">Delete {removing.name}?</h2>
+            {" "}
             <div className={s.summary}>
               <strong>{removing.name}</strong>
               <p>
@@ -251,27 +249,9 @@ export function Schedule({
               invitation links will stop working, and its RSVPs will no longer
               appear in active views.
             </p>
-            {deleteError && <p role="alert">{deleteError}</p>}
-            <div className={s.actions}>
-              <button
-                autoFocus
-                className={s.secondary}
-                disabled={busy}
-                onClick={closeDialog}
-              >
-                {stale ? "Review schedule" : "Keep event"}
-              </button>
-              <button
-                className={s.danger}
-                disabled={busy || stale}
-                onClick={remove}
-              >
-                {busy ? "Deleting…" : "Delete event"}
-              </button>
-            </div>
           </>
         )}
-      </dialog>
+      </ConfirmDialog>
     </section>
   );
 }

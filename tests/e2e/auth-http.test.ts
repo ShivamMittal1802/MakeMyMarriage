@@ -136,6 +136,16 @@ beforeAll(async () => {
     ],
     { env: process.env },
   );
+  await promisify(execFile)(
+    process.execPath,
+    [
+      "--conditions=react-server",
+      "--import",
+      "tsx",
+      "scripts/migrations/004-guests.ts",
+    ],
+    { env: process.env },
+  );
   await connectDatabase();
   server = spawn(
     process.execPath,
@@ -664,6 +674,7 @@ it("manages the planning team through scoped, paginated and versioned APIs with 
   );
   expect(cleared.status).toBe(200);
   expect((await cleared.json()).data.youtubeVideoId).toBeUndefined();
+  await verifyGuestWorkflow(base, weddingId);
   const helperPage = await request(`/dashboard/${weddingId}/team`);
   expect(helperPage.status).toBe(200);
   const helperHtml = await helperPage.text();
@@ -855,6 +866,21 @@ it("maintains a wedding schedule with IST times, cursor ordering, stale-write ch
   expect(await (await request(path)).text()).toContain("Amber Hall");
   const invitations = mongoose.connection.db!.collection("eventInvitations");
   const { insertedId } = await invitations.insertOne({
+    guestId: new mongoose.Types.ObjectId(),
+    createdBy: new mongoose.Types.ObjectId(me.id),
+    guestContactRevision: 0,
+    schemaVersion: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    token: {
+      hash: "isolated-fixture",
+      version: 0,
+      ciphertext: "fixture",
+      keyId: "fixture",
+      nonce: "fixture",
+      tag: "fixture",
+      issuedAt: new Date(),
+    },
     eventId: new mongoose.Types.ObjectId(event.id),
     weddingId: new mongoose.Types.ObjectId(me.membership.weddingId),
     status: "active",
@@ -1006,3 +1032,116 @@ it("serves the celebration anonymously with public-only fields, fresh event page
     (await visit("/api/v1/public/weddings/no-such-celebration/events")).status,
   ).toBe(404);
 });
+
+async function verifyGuestWorkflow(base: string, weddingId: string) {
+  const root = base + "/guests",
+    selections = base + "/event-invitations";
+  const create = await request(root, { name: "Riya Shah" });
+  expect(create.status).toBe(201);
+  const person = (await create.json()).data;
+  const page = "/dashboard/" + weddingId + "/guests";
+  expect(await (await request(page)).text()).toContain("Riya Shah");
+  const fn = (
+    await (
+      await request(base + "/events", {
+        name: "Guest workflow fixture",
+        location: "Garden",
+        startsAt: "2027-02-10T12:00:00Z",
+      })
+    ).json()
+  ).data;
+  const choice = { guestId: person.id, eventId: fn.id };
+  const add = await request(selections, choice);
+  expect(add.status).toBe(201);
+  const i = (await add.json()).data;
+  expect(i.rsvp).toBe("pending");
+  expect(i.token).toBeUndefined();
+  expect((await request(selections, choice)).status).toBe(409);
+  const ip = selections + "/" + i.id,
+    gp = root + "/" + person.id;
+  const active = await (await request(gp)).json();
+  const db = mongoose.connection.db!.collection("eventInvitations"),
+    key = { _id: new mongoose.Types.ObjectId(i.id) };
+  const old = await db.findOne(key);
+  await db.updateOne(key, { $set: { rsvp: "attending" } });
+  const patch = await request(
+    gp,
+    { email: "Riya@Example.com", expectedVersion: active.data.version },
+    false,
+    "PATCH",
+  );
+  expect(patch.status).toBe(200);
+  const updated = await patch.json();
+  expect(updated.data.email).toBe("riya@example.com");
+  expect(updated.effects.rsvpsPreserved).toBe(true);
+  const rotated = await db.findOne(key);
+  expect(rotated!.token.hash).not.toBe(old!.token.hash);
+  expect(
+    (await request(root, { name: "Other", email: "RIYA@example.com" })).status,
+  ).toBe(409);
+  expect(
+    (
+      await request(
+        gp,
+        { name: "Stale", expectedVersion: active.data.version },
+        false,
+        "PATCH",
+      )
+    ).status,
+  ).toBe(409);
+  expect(
+    await (
+      await request(page + "?view=events&event=" + fn.id + "&rsvp=attending")
+    ).text(),
+  ).toContain("Riya Shah");
+  expect(
+    await (await request(page + "?view=events&event=" + fn.id)).text(),
+  ).toContain("View Riya Shah");
+  expect(
+    await (
+      await request(page + "?view=events&event=" + fn.id + "&q=NoMatch")
+    ).text(),
+  ).toContain("No guests match these filters.");
+  expect(await (await request(page + "?guest=" + person.id)).text()).toContain(
+    "Remove from event",
+  );
+  expect(
+    (
+      await request(
+        ip + "?expectedVersion=" + rotated!.version,
+        undefined,
+        false,
+        "DELETE",
+      )
+    ).status,
+  ).toBe(204);
+  const revoked = (await (await request(ip)).json()).data;
+  const back = await request(ip + "/reactivate", {
+    expectedVersion: revoked.version,
+  });
+  expect((await back.json()).data.rsvp).toBe("attending");
+  const latest = (await (await request(gp)).json()).data;
+  expect(
+    (
+      await request(
+        gp + "?expectedVersion=" + latest.version,
+        undefined,
+        false,
+        "DELETE",
+      )
+    ).status,
+  ).toBe(204);
+  expect((await request(gp)).status).toBe(404);
+  expect(await db.findOne(key)).toMatchObject({
+    status: "revoked",
+    revokedReason: "guestDeleted",
+    rsvp: "attending",
+  });
+  const event = (await (await request(base + "/events/" + fn.id)).json()).data;
+  await request(
+    base + "/events/" + fn.id + "?expectedVersion=" + event.version,
+    undefined,
+    false,
+    "DELETE",
+  );
+}

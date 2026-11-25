@@ -83,6 +83,7 @@ const jobSchema = new Schema(
     operationId: { type: Schema.Types.ObjectId, required: true },
     scopeKey: { type: String, required: true },
     weddingId: Schema.Types.ObjectId,
+    contactRevision: { type: Number, min: 0 },
     subjectType: {
       type: String,
       enum: ["authToken", "memberInvitation", "eventInvitation"],
