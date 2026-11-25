@@ -1,3 +1,4 @@
+import { DeliveryProgress } from "@/modules/email/delivery-ui";
 import { notFound, redirect } from "next/navigation";
 import { currentAccount } from "@/lib/access/account";
 import { emailVerificationSatisfied } from "@/lib/access/email-verification";
@@ -36,6 +37,16 @@ export default async function Page({
     gid = param("guest"),
     q = (param("q") ?? "").slice(0, 150);
   async function loadView() {
+    if (view === "delivery") {
+      const event = await getEvent(actor, w, param("event") ?? "");
+      return (
+        <DeliveryProgress
+          w={w}
+          event={event}
+          operationId={param("operation")}
+        />
+      );
+    }
     if (gid) {
       const person = await getGuest(actor, w, gid);
       return view === "edit" ? (

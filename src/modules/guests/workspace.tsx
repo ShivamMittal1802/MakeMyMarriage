@@ -11,6 +11,7 @@ import { guestEvents, guestsByEvent } from "./views";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import s from "@/modules/events/events.module.css";
 import g from "./guests.module.css";
+import { InvitationTools } from "@/modules/email/delivery-ui";
 type Rsvp = "pending" | "attending" | "declined";
 const directory = (w: string) => `/dashboard/${w}/guests`,
   api = (w: string) => `/api/v1/weddings/${w}`;
@@ -679,6 +680,12 @@ export function EventRoster({
               />
             </form>
           </div>
+          <InvitationTools
+            w={w}
+            event={event}
+            rows={list.rows}
+            filter={filter}
+          />
           <section className={g.roster}>
             <div className={g.caption}>Guest list · {event.name}</div>
             <Columns roster />
