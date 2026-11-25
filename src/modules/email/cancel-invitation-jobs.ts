@@ -4,16 +4,19 @@ import { EmailJob, Usage } from "./models";
 
 // Link revocation stops undispatched jobs without cancelling unrelated recipients
 // in the same operation. An already-dispatched outcome retains its quota hold.
-export async function cancelMemberInvitationJobs(
+export async function cancelInvitationJobs(
   weddingId: Types.ObjectId,
   invitationIds: Types.ObjectId[],
   session: ClientSession,
   now: Date,
+  subjectType: "memberInvitation" | "eventInvitation" = "memberInvitation",
 ) {
   if (!invitationIds.length) return;
+  const cancelReason =
+    subjectType === "eventInvitation" ? "eventDeleted" : "invitationRevoked";
   const jobs = await EmailJob.find({
     weddingId,
-    subjectType: "memberInvitation",
+    subjectType,
     subjectId: { $in: invitationIds },
     state: {
       $in: [
@@ -30,7 +33,7 @@ export async function cancelMemberInvitationJobs(
       await EmailJob.updateOne(
         { _id: job._id, version: job.version },
         {
-          $set: { cancelRequestedAt: now, cancelReason: "invitationRevoked" },
+          $set: { cancelRequestedAt: now, cancelReason },
           $inc: { version: 1 },
         },
         { session },
@@ -57,7 +60,7 @@ export async function cancelMemberInvitationJobs(
         $set: {
           state: "cancelled",
           cancelRequestedAt: now,
-          cancelReason: "invitationRevoked",
+          cancelReason,
           ...(release ? { "quota.state": "released" } : {}),
         },
         $unset: { lease: "" },

@@ -15,6 +15,7 @@ const weddingSchema = new Schema(
     weddingDate: { type: String, required: true },
     location: { type: String, required: true, maxlength: 500 },
     introduction: { type: String, maxlength: 5000 },
+    youtubeVideoId: { type: String, match: /^[A-Za-z0-9_-]{11}$/ },
     timezone: {
       type: String,
       required: true,

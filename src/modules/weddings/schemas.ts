@@ -46,6 +46,56 @@ export const expectedVersionSchema = z
   .int()
   .nonnegative()
   .max(Number.MAX_SAFE_INTEGER);
+export function youtubeVideoId(value: string) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.port)
+    return undefined;
+  const path = url.pathname.replace(/\/$/, "");
+  let candidate: string | null | undefined;
+  if (url.hostname === "youtu.be") candidate = path.slice(1);
+  else if (
+    ["youtube.com", "www.youtube.com", "m.youtube.com"].includes(url.hostname)
+  ) {
+    candidate =
+      path === "/watch"
+        ? url.searchParams.get("v")
+        : /^\/(?:live|embed|shorts)\/([^/]+)$/.exec(path)?.[1];
+  }
+  return candidate && /^[A-Za-z0-9_-]{11}$/.test(candidate)
+    ? candidate
+    : undefined;
+}
+export const weddingPatchSchema = weddingCreateSchema
+  .pick({
+    couple: true,
+    weddingDate: true,
+    location: true,
+    introduction: true,
+  })
+  .partial()
+  .extend({
+    expectedVersion: expectedVersionSchema,
+    youtubeUrl: z
+      .string()
+      .trim()
+      .max(2048)
+      .refine(
+        (value) => !!youtubeVideoId(value),
+        "Enter a YouTube video or livestream link.",
+      )
+      .nullable()
+      .optional(),
+  })
+  .refine(
+    (value) => Object.keys(value).length > 1,
+    "Choose at least one detail to change.",
+  );
+export type WeddingPatch = z.infer<typeof weddingPatchSchema>;
 export const memberRolePatchSchema = z.strictObject({
   expectedVersion: expectedVersionSchema,
   role: roleSchema,
@@ -90,6 +140,7 @@ export type WeddingDto = {
   introduction?: string;
   timezone: "Asia/Kolkata";
   currency: "INR";
+  youtubeVideoId?: string;
   publicUrl: string;
   version: number;
   createdAt: string;

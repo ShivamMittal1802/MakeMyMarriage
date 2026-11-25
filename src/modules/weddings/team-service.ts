@@ -4,7 +4,7 @@ import { ensureWeddingDatabase } from "@/lib/db/wedding-readiness";
 import { duplicateKey, transaction } from "@/lib/db/connection";
 import { AppError } from "@/lib/http/errors";
 import { User } from "@/modules/identity/models";
-import { cancelMemberInvitationJobs } from "@/modules/email/cancel-member-invitation-jobs";
+import { cancelInvitationJobs } from "@/modules/email/cancel-invitation-jobs";
 import {
   Membership,
   MemberInvitation,
@@ -348,7 +348,7 @@ export async function removeMember(
       },
       { session },
     );
-    await cancelMemberInvitationJobs(
+    await cancelInvitationJobs(
       target.weddingId,
       invitations.map((item) => item._id),
       session,
@@ -414,7 +414,7 @@ export async function revokeMemberInvitation(
       { session },
     );
     if (result.modifiedCount !== 1) throw changed();
-    await cancelMemberInvitationJobs(
+    await cancelInvitationJobs(
       invitation.weddingId,
       [invitation._id],
       session,

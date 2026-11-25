@@ -31,6 +31,7 @@ import {
   exchangeMemberInvitation,
   acceptMemberInvitation,
   getWedding,
+  updateWedding,
   invitationContext,
   type AccountActor,
 } from "@/modules/weddings/service";
@@ -136,6 +137,52 @@ function enableLocalVerificationException() {
   vi.stubEnv("NODE_ENV", "development");
   vi.stubEnv("VERCEL", "");
 }
+
+it("allows one concurrent details edit per version and scopes updates to active members", async () => {
+  const owner = await actor("details-owner@example.com");
+  const outsider = await actor("outsider@example.com");
+  const wedding = await createWedding(owner, details);
+  const version = wedding.version;
+  await expect(
+    updateWedding(outsider, wedding.id, {
+      expectedVersion: version,
+      location: "Another venue",
+    }),
+  ).rejects.toMatchObject({ status: 404 });
+  const edit = (location: string) =>
+    updateWedding(owner, wedding.id, {
+      expectedVersion: version,
+      location,
+      introduction: "Welcome!",
+      couple: { brideName: "Nisha", groomName: "Karan" },
+      weddingDate: "2028-02-29",
+    });
+  const outcomes = await Promise.allSettled([
+    edit("Garden"),
+    edit("Courtyard"),
+  ]);
+  expect(outcomes.filter((item) => item.status === "fulfilled")).toHaveLength(
+    1,
+  );
+  expect(
+    outcomes.find((item) => item.status === "rejected")?.reason,
+  ).toMatchObject({ code: "VERSION_CONFLICT" });
+  const saved = await getWedding(owner, wedding.id);
+  expect(saved).toMatchObject({
+    version: version + 1,
+    introduction: "Welcome!",
+    couple: { brideName: "Nisha", groomName: "Karan" },
+    weddingDate: "2028-02-29",
+    publicUrl: wedding.publicUrl,
+    ownerUserId: owner.id,
+  });
+  const cleared = await updateWedding(owner, wedding.id, {
+    expectedVersion: saved.version,
+    introduction: "",
+  });
+  expect(cleared.introduction).toBeUndefined();
+  expect(cleared.location).toBe(saved.location);
+});
 
 describe("temporary local development verification", () => {
   it.each([

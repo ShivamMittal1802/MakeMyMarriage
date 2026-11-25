@@ -6,6 +6,7 @@ import { consumeRateLimit, requestNetworkKey } from "@/lib/security/rate-limit";
 import { currentActor } from "@/lib/access/actor";
 import {
   weddingCreateSchema,
+  weddingPatchSchema,
   memberInviteSchema,
   invitationExchangeSchema,
   emptyBodySchema,
@@ -13,6 +14,7 @@ import {
 import {
   createWedding,
   getWedding,
+  updateWedding,
   createMemberInvitation,
   shareMemberInvitation,
   exchangeMemberInvitation,
@@ -40,6 +42,19 @@ export const createWeddingHandler = (request: NextRequest) =>
   });
 export const getWeddingHandler = (weddingId: string) =>
   api(async () => success(await getWedding(await currentActor(), weddingId)));
+export const updateWeddingHandler = (request: NextRequest, weddingId: string) =>
+  api(async () => {
+    assertCsrf(request);
+    const actor = await currentActor();
+    await consumeRateLimit("edit-wedding", actor.id, 60, 15 * 60_000);
+    return success(
+      await updateWedding(
+        actor,
+        weddingId,
+        await readJson(request, weddingPatchSchema),
+      ),
+    );
+  });
 export const createInviteHandler = (request: NextRequest, weddingId: string) =>
   api(async () => {
     assertCsrf(request);

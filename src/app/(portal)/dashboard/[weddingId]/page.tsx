@@ -7,6 +7,7 @@ import { getWedding, weddingForMember } from "@/modules/weddings/service";
 import { OnboardingShell } from "@/modules/weddings/components/onboarding-shell";
 import { SetupUnavailable } from "@/modules/weddings/components/onboarding-controls";
 import { roleLabels, displayDate } from "@/modules/weddings/format";
+import { WeddingDetailsEditor } from "@/modules/weddings/components/wedding-details-editor";
 import styles from "@/modules/weddings/components/onboarding.module.css";
 export const metadata = { title: "Your wedding" };
 export default async function Page({
@@ -66,11 +67,27 @@ export default async function Page({
             <p className={styles.fullWidth}>{wedding.introduction}</p>
           )}
         </div>
-        <p className={styles.notice}>
-          Your wedding details and planning-team invitations are ready. Events,
-          guest invitations, expenses, the public website, and photos will be
-          added in the next development steps.
-        </p>
+        {wedding.youtubeVideoId && (
+          <p>
+            <a
+              className={styles.textButton}
+              href={`https://www.youtube.com/watch?v=${wedding.youtubeVideoId}`}
+            >
+              Open livestream on YouTube
+            </a>
+          </p>
+        )}
+        <WeddingDetailsEditor wedding={wedding} />
+        <section className={styles.teamSection}>
+          <h2>Wedding events</h2>
+          <p>Plan the times and venues for your celebrations.</p>
+          <Link
+            className={styles.primary}
+            href={`/dashboard/${wedding.id}/events`}
+          >
+            Open event schedule
+          </Link>
+        </section>
         <section id="planning-team" className={styles.teamSection}>
           <h2>Bring your people into the planning.</h2>
           <p>

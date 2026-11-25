@@ -22,6 +22,9 @@ import {
 import {
   objectIdSchema,
   weddingCreateSchema,
+  weddingPatchSchema,
+  youtubeVideoId,
+  type WeddingPatch,
   memberInviteSchema,
   type WeddingCreate,
   type WeddingDto,
@@ -112,6 +115,7 @@ function weddingDto(wedding: HydratedDocument<WeddingRecord>): WeddingDto {
     introduction: wedding.introduction ?? undefined,
     timezone: "Asia/Kolkata",
     currency: "INR",
+    youtubeVideoId: wedding.youtubeVideoId ?? undefined,
     publicUrl: `${appOrigin()}/weddings/${wedding.slug}`,
     version: wedding.version,
     createdAt: wedding.createdAt.toISOString(),
@@ -186,6 +190,48 @@ export async function weddingForMember(
 export async function getWedding(actor: AccountActor, weddingId: string) {
   await ensureWeddingDatabase();
   return weddingDto((await weddingForMember(actor, weddingId)).wedding);
+}
+
+export async function updateWedding(
+  actor: AccountActor,
+  weddingId: string,
+  input: WeddingPatch,
+) {
+  const { expectedVersion, youtubeUrl, introduction, ...details } =
+    weddingPatchSchema.parse(input);
+  await ensureWeddingDatabase();
+  return transaction(async (session) => {
+    const { wedding } = await weddingForMember(
+      actor,
+      weddingId,
+      session,
+      false,
+      true,
+    );
+    const updated = await Wedding.findOneAndUpdate(
+      { _id: wedding._id, version: expectedVersion },
+      {
+        $set: {
+          ...details,
+          ...(introduction ? { introduction } : {}),
+          ...(youtubeUrl ? { youtubeVideoId: youtubeVideoId(youtubeUrl) } : {}),
+        },
+        $unset: {
+          ...(introduction === "" ? { introduction: 1 } : {}),
+          ...(youtubeUrl === null ? { youtubeVideoId: 1 } : {}),
+        },
+        $inc: { version: 1 },
+      },
+      { session, returnDocument: "after", runValidators: true },
+    );
+    if (!updated)
+      throw new AppError(
+        409,
+        "VERSION_CONFLICT",
+        "Your wedding has changed. Review the latest details before saving.",
+      );
+    return weddingDto(updated);
+  });
 }
 
 export async function createWedding(actor: AccountActor, input: WeddingCreate) {

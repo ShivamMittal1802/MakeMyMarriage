@@ -51,6 +51,7 @@ Tooling caveat: npm marks ESLint 9 as deprecated, but the current Next.js React/
 | `npm run check`               | Run lint, formatting checks, and type checking                     |
 | `npm run db:migrate`          | Apply additive identity collections/indexes/validators             |
 | `npm run db:migrate:weddings` | Apply wedding/membership/invitation/gallery-access definitions     |
+| `npm run db:migrate:events`   | Apply the event validator and active schedule index                |
 | `npm run email:reconcile`     | Reconcile at most 100 interrupted/stale identity jobs; never sends |
 | `npm test`                    | Run isolated MongoDB integration and security tests                |
 | `npm run test:auth-http`      | Build and verify the production Auth.js HTTP/cookie lifecycle      |
@@ -98,9 +99,10 @@ Copy `.env.example` to ignored `.env.local`, then fill the settings needed for i
 ```sh
 npm run db:migrate
 npm run db:migrate:weddings
+npm run db:migrate:events
 ```
 
-The first prepares identity; the second is required before wedding creation or joining. Both were verified against isolated MongoDB fixtures and have now succeeded against the configured development Atlas database. Runtime registration/login require read/write permission in addition to migration privileges; both permission classes are now working in the configured development environment. Neither command changes cloud permissions. Wedding migration refuses a legacy permanent unique `memberships.userId` index, which needs a controlled audit rather than an automatic drop.
+The third command prepares the event collection and schedule index. It passed in isolated MongoDB and is pending on development Atlas. The first two commands prepare identity and wedding membership. Both were verified against isolated MongoDB fixtures and have now succeeded against the configured development Atlas database. Runtime registration/login require read/write permission in addition to migration privileges; both permission classes are now working in the configured development environment. Neither command changes cloud permissions. Wedding migration refuses a legacy permanent unique `memberships.userId` index, which needs a controlled audit rather than an automatic drop.
 
 Application requests check required validators, validation enforcement, and index definitions and do not silently create them. An incomplete migration fails closed. The MongoDB deployment must support transactions (Atlas or a replica set), and the migration identity needs collection/index/validator permissions. The additive migration can be run again; it never drops data or indexes.
 
@@ -142,6 +144,16 @@ Members return to `/dashboard/[weddingId]`, a minimal private entry with real sa
 
 `/join#token=…` exchanges a private link for a resource-scoped HttpOnly grant and then uses a clean `/join/[invitationId]` address. No intended email is exposed anonymously. Joining requires the intended verified account and an explicit Accept action, with membership and role conflicts checked transactionally. The grant lasts at most 15 minutes; reopen the original link if it expires. Login/registration preserve the pending context in cookies, while Not now lets an eligible account continue to wedding setup without accepting. An existing active membership always prevents creating or joining another wedding. Guest RSVP and photo grants remain separate future flows.
 
+From the wedding dashboard, select **Edit wedding details** to update the names, date, location, introduction, or YouTube livestream. Any active member can save. If another member saves first, review the latest details before editing again.
+
+## Wedding details editing
+
+Select **Edit wedding details** on the wedding dashboard to update the couple’s names, date, location, introduction, or YouTube livestream link. Any active member can save changes. Clearing the link removes the saved stream. If another member saves first, review the latest details before editing again. The wedding address and owner are fixed.
+
+## Wedding events
+
+Open **My wedding → Open event schedule**. Active members can add, edit, and delete functions with their own dates and venues. The schedule groups functions by date in India time. Use **Add end time** for an optional finish, including on the following day. Events require the additive `db:migrate:events` migration.
+
 ## Planning team management
 
 The team screen follows the approved Stitch Admin/Manager desktop exports and their embedded invite/share/change-role/remove/revoke dialogs. Mobile uses cards and bottom-sheet dialogs from the agreed responsive brief. Design-only preview controls, roster emails, global counters, co-owner wording, vendor/task features and fictional support links are omitted.
@@ -177,7 +189,7 @@ The API's `/api/v1` paths supersede the architecture's illustrative paths. The d
 
 1. Complete controlled Resend inbox and browser acceptance for identity. Configured Atlas migrations and registration/login HTTP checks have passed; external email delivery is not yet verified.
 2. Complete onboarding browser/responsive acceptance; Atlas permissions and both migrations are verified. Team administration, role changes, revocation/removal and their API/concurrency tests are implemented; complete their browser acceptance next.
-3. Wedding details, events, public projections, and the initial dashboard.
+3. Verify the wedding details editor in a browser. Complete responsive Events acceptance, then build public projections and dashboard summaries.
 4. Guests, event invitations, scoped RSVP grants, durable email operations, and manual continuation.
 5. Expenses, payment-date rules, totals, soft deletion, and concurrent-edit handling.
 6. Private photos, storage accounting, previews, original downloads, cleanup, QR codes, livestream settings, and acceptance verification.

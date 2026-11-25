@@ -124,6 +124,16 @@ beforeAll(async () => {
   );
   expect(weddingMigration.stdout).toContain("Wedding migration 002 applied");
 
+  await promisify(execFile)(
+    process.execPath,
+    [
+      "--conditions=react-server",
+      "--import",
+      "tsx",
+      "scripts/migrations/003-events.ts",
+    ],
+    { env: process.env },
+  );
   await connectDatabase();
   server = spawn(
     process.execPath,
@@ -595,6 +605,63 @@ it("manages the planning team through scoped, paginated and versioned APIs with 
   );
   expect(joined.status).toBe(200);
   const member = (await joined.json()).data;
+  const currentWedding = (await (await request(base)).json()).data;
+  const expectedVersion = currentWedding.version;
+  expect(
+    (await request(base, { expectedVersion, slug: "changed" }, false, "PATCH"))
+      .status,
+  ).toBe(422);
+  expect(
+    (
+      await request(
+        base,
+        {
+          expectedVersion,
+          youtubeUrl: "https://example.com/watch?v=abcdefghijk",
+        },
+        false,
+        "PATCH",
+      )
+    ).status,
+  ).toBe(422);
+  const edited = await request(
+    base,
+    {
+      expectedVersion,
+      location: "Updated garden venue",
+      youtubeUrl: "https://youtu.be/abcdefghijk",
+    },
+    false,
+    "PATCH",
+  );
+  expect(edited.status).toBe(200);
+  expect((await edited.json()).data).toMatchObject({
+    location: "Updated garden venue",
+    youtubeVideoId: "abcdefghijk",
+    version: expectedVersion + 1,
+    slug: currentWedding.slug,
+    couple: currentWedding.couple,
+  });
+  const stale = await request(
+    base,
+    { expectedVersion, location: "Stale venue" },
+    false,
+    "PATCH",
+  );
+  expect(stale.status).toBe(409);
+  expect((await stale.json()).error.code).toBe("VERSION_CONFLICT");
+  const dashboard = await (await request(`/dashboard/${weddingId}`)).text();
+  expect(dashboard).toContain("Updated garden venue");
+  expect(dashboard).toContain("Edit wedding details");
+  expect(dashboard).toContain("https://www.youtube.com/watch?v=abcdefghijk");
+  const cleared = await request(
+    base,
+    { expectedVersion: expectedVersion + 1, youtubeUrl: null },
+    false,
+    "PATCH",
+  );
+  expect(cleared.status).toBe(200);
+  expect((await cleared.json()).data.youtubeVideoId).toBeUndefined();
   const helperPage = await request(`/dashboard/${weddingId}/team`);
   expect(helperPage.status).toBe(200);
   const helperHtml = await helperPage.text();
@@ -716,4 +783,118 @@ it("manages the planning team through scoped, paginated and versioned APIs with 
   expect(
     (await (await request("/api/v1/me")).json()).data.membership,
   ).toBeNull();
+});
+
+it("maintains a wedding schedule with IST times, cursor ordering, stale-write checks and scoped deletion", async () => {
+  await logout();
+  await login("a different long password");
+  const me = (await (await request("/api/v1/me")).json()).data;
+  const path = "/dashboard/" + me.membership.weddingId + "/events";
+  const api = "/api/v1/weddings/" + me.membership.weddingId + "/events";
+  expect(await (await request(path)).text()).toContain("Add your first event");
+  const values = {
+    name: "Sangeet",
+    location: "Garden",
+    startsAt: "2027-02-12T23:30:00+05:30",
+    endsAt: "2027-02-13T01:00:00+05:30",
+    description: "Music",
+  };
+  const created = await request(api, values);
+  expect(created.status).toBe(201);
+  const event = (await created.json()).data,
+    detail = api + "/" + event.id;
+  expect(event.startsAt).toBe("2027-02-12T18:00:00.000Z");
+  const earlier = (
+    await (
+      await request(api, {
+        ...values,
+        name: "Mehendi",
+        startsAt: "2027-02-11T10:00:00+05:30",
+      })
+    ).json()
+  ).data;
+  const first = await (await request(api + "?limit=1")).json();
+  expect(first.data[0].id).toBe(earlier.id);
+  const next = await (
+    await request(
+      api + "?limit=1&cursor=" + encodeURIComponent(first.page.nextCursor),
+    )
+  ).json();
+  expect(next.data[0].id).toBe(event.id);
+  expect(
+    (
+      await request(
+        detail,
+        { startsAt: "2027-02-15T00:00:00Z", expectedVersion: event.version },
+        false,
+        "PATCH",
+      )
+    ).status,
+  ).toBe(422);
+  const edited = await request(
+    detail,
+    { expectedVersion: event.version, location: "Amber Hall", endsAt: null },
+    false,
+    "PATCH",
+  );
+  expect(edited.status).toBe(200);
+  const saved = (await edited.json()).data;
+  expect(saved.endsAt).toBeUndefined();
+  expect(
+    (
+      await request(
+        detail,
+        { expectedVersion: event.version, name: "Outdated" },
+        false,
+        "PATCH",
+      )
+    ).status,
+  ).toBe(409);
+  expect(await (await request(path)).text()).toContain("Amber Hall");
+  const invitations = mongoose.connection.db!.collection("eventInvitations");
+  const { insertedId } = await invitations.insertOne({
+    eventId: new mongoose.Types.ObjectId(event.id),
+    weddingId: new mongoose.Types.ObjectId(me.membership.weddingId),
+    status: "active",
+    rsvp: "attending",
+    version: 0,
+  });
+  expect(
+    (
+      await request(
+        detail + "?expectedVersion=" + event.version,
+        undefined,
+        false,
+        "DELETE",
+      )
+    ).status,
+  ).toBe(409);
+  for (let i = 0; i < 2; i++) {
+    expect(
+      (
+        await request(
+          detail + "?expectedVersion=" + saved.version,
+          undefined,
+          false,
+          "DELETE",
+        )
+      ).status,
+    ).toBe(204);
+  }
+  expect(await invitations.findOne({ _id: insertedId })).toMatchObject({
+    rsvp: "attending",
+    status: "revoked",
+    revokedReason: "eventDeleted",
+    version: 1,
+  });
+  expect((await request(detail)).status).toBe(404);
+  expect(
+    (await (await request(api)).json()).data.map(
+      (item: { id: string }) => item.id,
+    ),
+  ).toEqual([earlier.id]);
+  await logout();
+  await login("planning helper password", "team-admin-http@example.com");
+  expect((await request(api)).status).toBe(404);
+  expect((await request(api, values)).status).toBe(404);
 });

@@ -1,8 +1,6 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
-import { z } from "zod";
 import { api, readJson, success } from "@/lib/http/api";
-import { AppError } from "@/lib/http/errors";
 import { currentActor } from "@/lib/access/actor";
 import { assertCsrf } from "@/lib/security/csrf";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
@@ -11,7 +9,7 @@ import {
   invitationListSchema,
   memberRolePatchSchema,
 } from "./schemas";
-import { invalidCursor } from "./pagination";
+import { query, versionQuery } from "@/lib/http/query";
 import {
   listMembers,
   getMember,
@@ -21,38 +19,6 @@ import {
   revokeMemberInvitation,
 } from "./team-service";
 
-function query<T>(request: NextRequest, schema: z.ZodType<T>): T {
-  const values: Record<string, string> = {};
-  for (const [key, value] of request.nextUrl.searchParams) {
-    if (key in values)
-      throw new AppError(
-        422,
-        "VALIDATION_ERROR",
-        "Query parameters must not be repeated.",
-      );
-    values[key] = value;
-  }
-  if (
-    "cursor" in values &&
-    (!values.cursor.length || values.cursor.length > 2048)
-  )
-    throw invalidCursor();
-  const parsed = schema.safeParse(values);
-  if (!parsed.success)
-    throw new AppError(
-      422,
-      "VALIDATION_ERROR",
-      "Check the list or version parameters.",
-    );
-  return parsed.data;
-}
-const versionQuery = z.strictObject({
-  expectedVersion: z
-    .string()
-    .regex(/^\d+$/)
-    .transform(Number)
-    .pipe(z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)),
-});
 export const listMembersHandler = (request: NextRequest, weddingId: string) =>
   api(async () => {
     return NextResponse.json(
