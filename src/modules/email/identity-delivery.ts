@@ -14,6 +14,8 @@ import {
 import { AuthToken, User } from "@/modules/identity/models";
 import type { IdentityPurpose } from "@/modules/identity/schemas";
 import { EmailAttempt, EmailJob, EmailOperation, Usage } from "./models";
+import { Guest, Invitation } from "@/modules/guests/model";
+import { WeddingEvent } from "@/modules/events/model";
 import { identityEmail } from "./templates";
 
 import { reserveEmailQuota } from "./quota";
@@ -198,11 +200,22 @@ async function activeChallenge(
   return !!user;
 }
 
-export async function dispatchIdentityEmail(
+async function canSend(job: InstanceType<typeof EmailJob>,session:ClientSession,now:Date){
+ if(job.subjectType==="authToken") return identityDeliveryAllowed(job.intendedRecipient) && activeChallenge(job.subjectId,session,now);
+ const cfg=emailConfig(now);
+ if(job.mode==="test" && job.actualRecipient!==cfg.testRecipient) return false;
+ const invitation=await Invitation.findOne({_id:job.subjectId,weddingId:job.weddingId,status:"active",guestContactRevision:job.contactRevision,"token.version":job.tokenVersion}).session(session);
+ if(!invitation) return false;
+ const guest=await Guest.exists({_id:invitation.guestId,weddingId:job.weddingId,emailNormalized:job.intendedRecipient,isDeleted:false,contactRevision:job.contactRevision}).session(session);
+ return !!guest && !!(await WeddingEvent.exists({_id:invitation.eventId,weddingId:job.weddingId,isDeleted:false}).session(session));
+}
+export async function dispatchIdentityEmail(jobId: Types.ObjectId, transport:EmailTransport=sendIdentityEmail){await dispatchEmailJob(jobId,transport);}
+export async function dispatchEmailJob(
   jobId: Types.ObjectId,
   transport: EmailTransport = sendIdentityEmail,
   windowRetry = 0,
-) {
+  guestOperation?: Types.ObjectId,
+):Promise<string|undefined> {
   await ensureIdentityDatabase();
   const leaseId = randomUUID();
   let claimed;
@@ -212,8 +225,7 @@ export async function dispatchIdentityEmail(
       const job = await EmailJob.findOneAndUpdate(
         {
           _id: jobId,
-          state: "pending",
-          subjectType: "authToken",
+          ...(guestOperation ? {operationId:guestOperation,subjectType:"eventInvitation",state:{$in:["pending","retryableFailed","deferredQuota"]},$or:[{retryNotBefore:{$exists:false}},{retryNotBefore:{$lte:now}}]} : {state:"pending",subjectType:"authToken"}),
           cancelRequestedAt: { $exists: false },
         },
         {
@@ -229,8 +241,7 @@ export async function dispatchIdentityEmail(
       const config = emailConfig(now);
       if (
         job.mode !== config.mode ||
-        !identityDeliveryAllowed(job.intendedRecipient) ||
-        !(await activeChallenge(job.subjectId, session, now))
+        !(await canSend(job,session,now))
       ) {
         await EmailJob.updateOne(
           { _id: jobId },
@@ -241,12 +252,12 @@ export async function dispatchIdentityEmail(
           },
           { session },
         );
-        await EmailOperation.updateOne(
+        if (!guestOperation) await EmailOperation.updateOne(
           { _id: job.operationId },
           { $set: { status: "cancelled" }, $inc: { version: 1 } },
           { session },
         );
-        return null;
+        return "cancelled" as const;
       }
       if (job.mode === "simulated") {
         await EmailJob.updateOne(
@@ -258,12 +269,12 @@ export async function dispatchIdentityEmail(
           },
           { session },
         );
-        await EmailOperation.updateOne(
+        if (!guestOperation) await EmailOperation.updateOne(
           { _id: job.operationId },
           { $set: { status: "closed" }, $inc: { version: 1 } },
           { session },
         );
-        return null;
+        return "simulated" as const;
       }
       const quota = await reserveEmailQuota(session, now);
       if (!quota) {
@@ -280,7 +291,7 @@ export async function dispatchIdentityEmail(
           },
           { session },
         );
-        return null;
+        return "deferredQuota" as const;
       }
       await EmailJob.updateOne(
         { _id: jobId },
@@ -293,10 +304,11 @@ export async function dispatchIdentityEmail(
     // A concurrent first reservation may win creation of a shared window. The
     // aborted transaction made no claim or reservation, so a bounded retry is safe.
     if (duplicateKey(error) && windowRetry < 1)
-      return dispatchIdentityEmail(jobId, transport, windowRetry + 1);
+      return dispatchEmailJob(jobId, transport, windowRetry + 1,guestOperation);
     throw error;
   }
   if (!claimed) return;
+  if(typeof claimed==="string")return claimed;
 
   let payload: IdentityEmailPayload;
   try {
@@ -332,13 +344,13 @@ export async function dispatchIdentityEmail(
       if (changed.modifiedCount)
         await settleCounters(claimed.quota, "released", session);
       if (changed.modifiedCount)
-        await EmailOperation.updateOne(
+        if (!guestOperation) await EmailOperation.updateOne(
           { _id: claimed.job.operationId },
           { $set: { status: "closed" }, $inc: { version: 1 } },
           { session },
         );
     });
-    return;
+    return "permanentlyFailed";
   }
 
   const canDispatch = await transaction(async (session) => {
@@ -359,7 +371,7 @@ export async function dispatchIdentityEmail(
       !month ||
       day.windowEnd <= now ||
       month.windowEnd <= now ||
-      !(await activeChallenge(job.subjectId, session, now))
+      !(await canSend(job,session,now))
     ) {
       await settleCounters(claimed.quota, "released", session);
       await EmailJob.updateOne(
@@ -375,7 +387,7 @@ export async function dispatchIdentityEmail(
         },
         { session },
       );
-      await EmailOperation.updateOne(
+      if (!guestOperation) await EmailOperation.updateOne(
         { _id: job.operationId },
         { $set: { status: "cancelled" }, $inc: { version: 1 } },
         { session },
@@ -385,7 +397,7 @@ export async function dispatchIdentityEmail(
     await EmailJob.updateOne(
       { _id: jobId, "lease.id": leaseId },
       {
-        $set: { dispatchStartedAt: now, firstAttemptAt: now },
+        $set: { dispatchStartedAt: now, firstAttemptAt: job.firstAttemptAt??now },
         $inc: { attemptCount: 1, version: 1 },
       },
       { session },
@@ -395,7 +407,7 @@ export async function dispatchIdentityEmail(
         {
           jobId,
           operationId: job.operationId,
-          attemptNo: 1,
+          attemptNo: claimed.job.attemptCount+1,
           leaseId,
           startedAt: now,
           outcome: "started",
@@ -413,7 +425,7 @@ export async function dispatchIdentityEmail(
     result = { outcome: "unknown", code: "PROVIDER_OUTCOME_UNKNOWN" };
   }
 
-  await transaction(async (session) => {
+  return transaction(async (session) => {
     const state =
       result.outcome === "accepted"
         ? "accepted"
@@ -447,7 +459,7 @@ export async function dispatchIdentityEmail(
             ? { retryNotBefore: new Date(now.getTime() + 60_000) }
             : {}),
         },
-        $unset: { lease: "" },
+        $unset: { lease: "", ...(guestOperation && result.outcome==="rejected" && result.retryable?{dispatchStartedAt:""}:{}) },
         $inc: { version: 1 },
       },
       { session },
@@ -455,7 +467,7 @@ export async function dispatchIdentityEmail(
     if (!changed.modifiedCount) return;
     await settleCounters(claimed.quota, quotaState, session);
     await EmailAttempt.updateOne(
-      { jobId, attemptNo: 1, leaseId },
+      { jobId, attemptNo: claimed.job.attemptCount+1, leaseId },
       {
         $set: {
           outcome: result.outcome,
@@ -468,7 +480,7 @@ export async function dispatchIdentityEmail(
       },
       { session },
     );
-    await EmailOperation.updateOne(
+    if (!guestOperation) await EmailOperation.updateOne(
       { _id: claimed.job.operationId },
       {
         $set: {
@@ -481,16 +493,17 @@ export async function dispatchIdentityEmail(
       },
       { session },
     );
+    return state;
   });
 }
 
 /** Bounded operator recovery. Unknown sends keep their allowance held forever
  * unless provider evidence is reviewed; this command never sends email. */
-export async function reconcileIdentityEmail(limit = 100) {
+export async function reconcileIdentityEmail(limit = 100,guestOperation?: Types.ObjectId) {
   await ensureIdentityDatabase();
   const now = new Date();
   const jobs = await EmailJob.find({
-    subjectType: "authToken",
+    ...(guestOperation?{subjectType:"eventInvitation",operationId:guestOperation}:{subjectType:"authToken"}),
     state: "processing",
     "lease.until": { $lte: now },
   })
@@ -517,7 +530,7 @@ export async function reconcileIdentityEmail(limit = 100) {
         { _id: job._id, version: job.version },
         {
           $set: {
-            state: ambiguous ? "needsReview" : "cancelled",
+            state: ambiguous ? "needsReview" : guestOperation && !job.cancelRequestedAt ? "pending" : "cancelled",
             lastErrorCode: ambiguous
               ? "INTERRUPTED_DISPATCH"
               : "INTERRUPTED_BEFORE_DISPATCH",
@@ -543,7 +556,7 @@ export async function reconcileIdentityEmail(limit = 100) {
           },
           { session },
         );
-      await EmailOperation.updateOne(
+      if(!guestOperation)await EmailOperation.updateOne(
         { _id: job.operationId },
         {
           $set: { status: ambiguous ? "open" : "cancelled" },
@@ -555,6 +568,7 @@ export async function reconcileIdentityEmail(limit = 100) {
     });
     if (changed) reconciled++;
   }
+  if(guestOperation)return reconciled;
   const remaining = Math.min(100, Math.max(1, limit)) - jobs.length;
   if (remaining <= 0) return reconciled;
   // Auth-token TTL may already have removed the disposable challenge. Keep the

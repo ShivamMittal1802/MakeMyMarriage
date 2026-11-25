@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
       "/reset-password",
       "/onboarding",
       "/join/:path*",
+      "/invitations/:path*",
+      "/rsvp/:path*",
       "/dashboard/:path*",
     ].map((source) => ({
       source,

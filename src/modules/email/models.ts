@@ -27,6 +27,7 @@ const operationSchema = new Schema(
     scopeKey: { type: String, required: true },
     weddingId: Schema.Types.ObjectId,
     initiatedByUserId: Schema.Types.ObjectId,
+    eventId: Schema.Types.ObjectId,
     kind: { type: String, enum: emailKinds, required: true },
     mode: { type: String, enum: modes, required: true },
     requestKey: { type: String, required: true },
@@ -83,6 +84,7 @@ const jobSchema = new Schema(
     operationId: { type: Schema.Types.ObjectId, required: true },
     scopeKey: { type: String, required: true },
     weddingId: Schema.Types.ObjectId,
+    tokenVersion: Number,
     contactRevision: { type: Number, min: 0 },
     subjectType: {
       type: String,

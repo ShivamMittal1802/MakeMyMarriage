@@ -33,6 +33,7 @@ export async function mutateJson<T>(
   path: string,
   method: "POST" | "PATCH" | "DELETE",
   body?: unknown,
+  idempotencyKey?:string,
 ): Promise<T> {
   const csrf = await getJson<{ csrfToken: string }>("/api/v1/csrf");
   let response: Response;
@@ -41,6 +42,7 @@ export async function mutateJson<T>(
       method,
       headers: {
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(idempotencyKey ? {"Idempotency-Key":idempotencyKey}:{}),
         "X-CSRF-Token": csrf.csrfToken,
       },
       body: body === undefined ? undefined : JSON.stringify(body),

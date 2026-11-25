@@ -9,7 +9,7 @@ import { EmailJob, Usage } from "./models";
  * Count pre-dispatch processing too, so a concurrent dispatch-start write cannot
  * disappear from a rollover snapshot. Accepted results remain counted using
  * their settlement time; unknown results stay held until operator resolution. */
-export async function reserveEmailQuota(session: ClientSession, now: Date) {
+async function quotaWindows(session: ClientSession, now: Date) {
   const config = emailConfig(now);
   const dayStart = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
@@ -34,7 +34,7 @@ export async function reserveEmailQuota(session: ClientSession, now: Date) {
       limit: config.monthlyLimit,
     },
   ];
-  let blocked = false;
+  let available = Infinity;
   for (const window of windows) {
     const counter = await Usage.findOneAndUpdate(
       { _id: window._id },
@@ -84,7 +84,8 @@ export async function reserveEmailQuota(session: ClientSession, now: Date) {
       carryCount > carryHeld ||
       counter.consumed + counter.reserved + held >= counter.limit
     )
-      blocked = true;
+      available = 0;
+    else available=Math.min(available,counter.limit-counter.consumed-counter.reserved-held);
     const changed = await Usage.updateOne(
       { _id: window._id, version: counter.version },
       { $set: { held, carryHeld }, $inc: { version: 1 } },
@@ -92,7 +93,13 @@ export async function reserveEmailQuota(session: ClientSession, now: Date) {
     );
     if (changed.modifiedCount !== 1) throw new Error("Quota claim conflict");
   }
-  if (blocked) return null;
+  return {available, windows};
+}
+export async function availableEmailQuota(session:ClientSession,now:Date){
+ return (await quotaWindows(session,now)).available;
+}
+export async function reserveEmailQuota(session:ClientSession,now:Date){
+  const {available,windows}=await quotaWindows(session,now);if(available<=0)return null;
   for (const window of windows) {
     const changed = await Usage.updateOne(
       {

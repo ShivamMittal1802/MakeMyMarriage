@@ -51,6 +51,7 @@ Tooling caveat: npm marks ESLint 9 as deprecated, but the current Next.js React/
 | `npm run check`               | Run lint, formatting checks, and type checking                     |
 | `npm run db:migrate`          | Apply additive identity collections/indexes/validators             |
 | `npm run db:migrate:weddings` | Apply wedding/membership/invitation/gallery-access definitions     |
+| `npm run db:migrate:guests`   | Apply the guest and event invitation validators and indexes        |
 | `npm run db:migrate:events`   | Apply the event validator and active schedule index                |
 | `npm run email:reconcile`     | Reconcile at most 100 interrupted/stale identity jobs; never sends |
 | `npm test`                    | Run isolated MongoDB integration and security tests                |
@@ -100,6 +101,7 @@ Copy `.env.example` to ignored `.env.local`, then fill the settings needed for i
 npm run db:migrate
 npm run db:migrate:weddings
 npm run db:migrate:events
+npm run db:migrate:guests
 ```
 
 The third command prepares the event collection and schedule index. It passed in isolated MongoDB and on development Atlas. The first two commands prepare identity and wedding membership. Both were verified against isolated MongoDB fixtures and have now succeeded against the configured development Atlas database. Runtime registration/login require read/write permission in addition to migration privileges; both permission classes are now working in the configured development environment. Neither command changes cloud permissions. Wedding migration refuses a legacy permanent unique `memberships.userId` index, which needs a controlled audit rather than an automatic drop.
@@ -158,6 +160,10 @@ Visitors can open `/weddings/{slug}` without an account. The dashboard links to 
 
 Open **My wedding → Open event schedule**. Active members can add, edit, and delete functions with their own dates and venues. The schedule groups functions by date in India time. Use **Add end time** for an optional finish, including on the following day. Events require the additive `db:migrate:events` migration.
 
+## Wedding guests
+
+Open **My wedding → Open guest directory**. Active planning-team members can add a guest with just a name, edit contact details, select events for that guest, and browse each event’s roster by RSVP status. Withdrawing and restoring an event selection preserves the recorded RSVP. Selecting an event does not send an email.
+
 ## Planning team management
 
 The team screen follows the approved Stitch Admin/Manager desktop exports and their embedded invite/share/change-role/remove/revoke dialogs. Mobile uses cards and bottom-sheet dialogs from the agreed responsive brief. Design-only preview controls, roster emails, global counters, co-owner wording, vendor/task features and fictional support links are omitted.
@@ -194,7 +200,7 @@ The API's `/api/v1` paths supersede the architecture's illustrative paths. The d
 1. Complete controlled Resend inbox and browser acceptance for identity. Configured Atlas migrations and registration/login HTTP checks have passed; external email delivery is not yet verified.
 2. Complete onboarding browser/responsive acceptance; Atlas permissions and both migrations are verified. Team administration, role changes, revocation/removal and their API/concurrency tests are implemented; complete their browser acceptance next.
 3. Verify the wedding details editor in a browser. Complete responsive Events and celebration-page acceptance, then build dashboard summaries.
-4. Guests, event invitations, scoped RSVP grants, durable email operations, and manual continuation.
+4. Build the private guest RSVP flow and invitation email delivery on top of the guest directory and event selections.
 5. Expenses, payment-date rules, totals, soft deletion, and concurrent-edit handling.
 6. Private photos, storage accounting, previews, original downloads, cleanup, QR codes, livestream settings, and acceptance verification.
 
