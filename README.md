@@ -102,6 +102,7 @@ npm run db:migrate
 npm run db:migrate:weddings
 npm run db:migrate:events
 npm run db:migrate:guests
+npm run db:migrate:expenses
 ```
 
 The third command prepares the event collection and schedule index. It passed in isolated MongoDB and on development Atlas. The first two commands prepare identity and wedding membership. Both were verified against isolated MongoDB fixtures and have now succeeded against the configured development Atlas database. Runtime registration/login require read/write permission in addition to migration privileges; both permission classes are now working in the configured development environment. Neither command changes cloud permissions. Wedding migration refuses a legacy permanent unique `memberships.userId` index, which needs a controlled audit rather than an automatic drop.
@@ -140,11 +141,11 @@ The production HTTP suite deliberately sets the flag and still verifies the real
 
 ## Wedding onboarding
 
-Open `/onboarding` after login. Accounts that satisfy the verification check and have no membership can enter the couple’s names, a valid date, location, website slug, optional introduction, and their own role. Review preserves edits before an explicit create action. Creation commits the wedding, permanent owner membership, and separate encrypted photo upload/view access records in one transaction. The wedding record supplies the public celebration details. Photo storage remains planned. The selected Bride/Groom/Manager role is separate from ownership; names do not create accounts or assign roles. Wedding timezone and currency are fixed to Asia/Kolkata and INR.
+Open `/onboarding` after login. Accounts that satisfy the verification check and have no membership can enter the couple’s names, a valid date, location, website slug, optional introduction, and their own role. Review preserves edits before an explicit create action. Creation commits the wedding, permanent owner membership, and separate encrypted photo upload/view access records in one transaction. The wedding record supplies the public celebration details. Private photo implementation and deferred storage setup are described below. The selected Bride/Groom/Manager role is separate from ownership; names do not create accounts or assign roles. Wedding timezone and currency are fixed to Asia/Kolkata and INR.
 
 Members return to `/dashboard/[weddingId]`, a minimal private entry with real saved details and an Open planning team link. `/dashboard/[weddingId]/team` contains the active roster and administrator-only pending invitations. The owner, bride and groom can create/share/revoke private invitations, change non-owner roles and remove non-owner members. Managers can view the active roster; they cannot read invitation emails or perform administration. Ownership and the owner’s selected role remain immutable. Creation does not send email. Invitations are tied to an intended email and expire after seven days; pending invitations do not reserve a Bride/Groom role.
 
-`/join#token=…` exchanges a private link for a resource-scoped HttpOnly grant and then uses a clean `/join/[invitationId]` address. No intended email is exposed anonymously. Joining requires the intended verified account and an explicit Accept action, with membership and role conflicts checked transactionally. The grant lasts at most 15 minutes; reopen the original link if it expires. Login/registration preserve the pending context in cookies, while Not now lets an eligible account continue to wedding setup without accepting. An existing active membership always prevents creating or joining another wedding. Guest RSVP and photo grants remain separate future flows.
+`/join#token=…` exchanges a private link for a resource-scoped HttpOnly grant and then uses a clean `/join/[invitationId]` address. No intended email is exposed anonymously. Joining requires the intended verified account and an explicit Accept action, with membership and role conflicts checked transactionally. The grant lasts at most 15 minutes; reopen the original link if it expires. Login/registration preserve the pending context in cookies, while Not now lets an eligible account continue to wedding setup without accepting. An existing active membership always prevents creating or joining another wedding. Guest RSVP and photo grants use separate resource scopes.
 
 From the wedding dashboard, select **Edit wedding details** to update the names, date, location, introduction, or YouTube livestream. Any active member can save. If another member saves first, review the latest details before editing again.
 
@@ -209,3 +210,26 @@ Verify landing-page navigation, mobile-menu dismissal, account navigation, FAQ k
 ## Deployment
 
 The future deployment target is Vercel with Node.js 24.x and Next.js framework detection, using the repository root. The scaffold does not deploy or provision services. Keep the Vercel runtime major aligned with `package.json` and `.nvmrc`; Vercel manages runtime patch updates. No custom Vercel configuration is needed for this shell.
+
+## Wedding expenses
+
+Open **My wedding → Open expense tracker** to record costs, cumulative paid amounts, remaining balances and payment dates. Apply `npm run db:migrate:expenses` when setting up a new database.
+
+## Private wedding photos
+
+Open **Wedding photos** from your dashboard. The gallery, upload card, share-access sheet and full-screen viewer follow the approved Stitch exports. Upload and viewing links are separate capabilities; guests do not need accounts. The gallery is unavailable until R2 is configured, and upload controls clearly explain that state.
+
+Before enabling storage:
+
+1. Run `npm run db:migrate:photos` with the existing database migration permissions. Migration 006 adds photo indexes/validation and extends the shared usage validator without dropping existing records. Existing authentication accepts the prior email-only validator until this migration runs.
+2. Configure `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` in ignored `.env.local` (or deployment secrets). Use a private bucket and a bucket-scoped Object Read & Write credential. Keep public bucket access disabled. Never expose these values through `NEXT_PUBLIC_` variables.
+3. Configure bucket CORS with the exact application origin. Allow `PUT`, `GET`, and `HEAD`; allow `Content-Type`; expose `ETag`. Do not substitute a wildcard origin for deployment configuration. Restart the app after configuring its environment.
+4. Verify a small JPEG, PNG and WebP upload from a member and a guest upload link; open the separate viewing link; compare the downloaded original bytes; test deletion. These live R2 checks are still pending.
+
+Uploads are direct signed PUTs with size/type bound to the signature, followed by explicit server completion. The server checks image bytes and the 40-megapixel limit, creates a bounded WebP preview, and retains an immutable original. PUT links last at most 60 seconds, preview/download links 120 seconds, and guest grants 15 minutes. Reopen the original application link after a grant expires. A viewer cannot upload, and an upload guest cannot browse, download or remove photos.
+
+`STORAGE_LIMIT_BYTES` defaults to 8,000,000,000; `MAX_PHOTO_BYTES` defaults to 20,000,000. Storage reservations include staging, original and preview allowance. All deployments using the same bucket must use the same accounting database (or separate explicitly budgeted buckets); separate databases do not coordinate one bucket's quota. Do not change the bucket/account on a populated deployment without migrating its objects and accounting.
+
+Run `npm run photos:reconcile` for bounded cleanup of abandoned uploads and pending deletions. There is no background worker. Deletion hides a photo immediately; physical cleanup may remain pending while an upload capability is still usable or R2 is unavailable. Cleanup retains its charge until removal is confirmed; staging cleanup includes a 15-minute grace period after write-link expiry. Retry this command after resolving a provider outage. Previously issued read URLs and downloaded files cannot be recalled.
+
+Local validation includes image/signature tests plus isolated MongoDB tests for access separation, idempotent reservations, quota contention, interrupted completion, original preservation and cleanup. No real R2 connection is implied by those tests.

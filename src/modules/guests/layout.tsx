@@ -6,29 +6,51 @@ export function GuestLayout({
   w,
   email,
   children,
+  active = "guests",
 }: {
   w: string;
   email: string;
   children: ReactNode;
+  active?: "guests" | "expenses" | "photos";
 }) {
   const home = "/dashboard/" + w;
   return (
     <div className={g.shell}>
       <a href="#guest-content" className={g.skip}>
-        Skip to guests
+        Skip to content
       </a>
       <header className={g.header}>
         <Link href="/" className={g.brand}>
           Make My Marriage
         </Link>
         <Link className={g.breadcrumb} href={home}>
-          My wedding / Guests
+          My wedding /{" "}
+          {active === "guests"
+            ? "Guests"
+            : active === "expenses"
+              ? "Expenses"
+              : "Photos"}
         </Link>
         <nav aria-label="Wedding management">
           <Link href={home + "/events"}>Events</Link>
           <Link href={home + "/team"}>Planning Team</Link>
-          <Link aria-current="page" href={home + "/guests"}>
+          <Link
+            aria-current={active === "guests" ? "page" : undefined}
+            href={home + "/guests"}
+          >
             Guests
+          </Link>
+          <Link
+            aria-current={active === "expenses" ? "page" : undefined}
+            href={home + "/expenses"}
+          >
+            Expenses
+          </Link>
+          <Link
+            aria-current={active === "photos" ? "page" : undefined}
+            href={home + "/photos"}
+          >
+            Photos
           </Link>
         </nav>
         <AccountMenu email={email} />

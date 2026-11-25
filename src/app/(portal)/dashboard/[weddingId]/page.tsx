@@ -101,6 +101,25 @@ export default async function Page({
             Open guest directory
           </Link>
         </section>
+        <section className={styles.teamSection}>
+          <h2>Wedding expenses</h2>
+          <Link
+            className={styles.primary}
+            href={`/dashboard/${wedding.id}/expenses`}
+          >
+            Open expense tracker
+          </Link>
+        </section>
+        <section className={styles.teamSection}>
+          <h2>Wedding photos</h2>
+          <p>Collect and share your wedding memories privately.</p>
+          <Link
+            className={styles.primary}
+            href={`/dashboard/${wedding.id}/photos`}
+          >
+            Open wedding photos
+          </Link>
+        </section>
         <section id="planning-team" className={styles.teamSection}>
           <h2>Bring your people into the planning.</h2>
           <p>

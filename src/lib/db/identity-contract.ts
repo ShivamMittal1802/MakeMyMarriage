@@ -183,7 +183,55 @@ function collectionValidators() {
     ]),
   );
 }
-export const identityValidators = collectionValidators();
+export const identityValidators: Record<string, unknown> =
+  collectionValidators();
+export const legacyEmailUsageValidator = identityValidators.usage;
+// The shared usage collection also holds the deployment-wide photo budget.
+// Keep the email contract intact while accepting the storage discriminator.
+identityValidators.usage = {
+  $or: [
+    identityValidators.usage,
+    {
+      $jsonSchema: {
+        bsonType: "object",
+        required: [
+          "_id",
+          "kind",
+          "limitBytes",
+          "storedBytes",
+          "reservedBytes",
+          "version",
+          "schemaVersion",
+          "createdAt",
+          "updatedAt",
+        ],
+        properties: {
+          _id: { bsonType: "string", pattern: "^storage:" },
+          kind: { enum: ["storage"] },
+          ...Object.fromEntries(
+            [
+              "limitBytes",
+              "storedBytes",
+              "reservedBytes",
+              "version",
+              "schemaVersion",
+            ].map((k) => [
+              k,
+              {
+                bsonType: ["int", "long", "double"],
+                minimum: 0,
+                multipleOf: 1,
+                maximum: Number.MAX_SAFE_INTEGER,
+              },
+            ]),
+          ),
+          createdAt: { bsonType: "date" },
+          updatedAt: { bsonType: "date" },
+        },
+      },
+    },
+  ],
+};
 
 export const identityIndexes: Record<
   string,

@@ -26,11 +26,13 @@ async function request(
   body?: URLSearchParams | object,
   auth = false,
   method?: "PATCH" | "DELETE",
+  requestKey?: string,
 ) {
   const headers = new Headers({
     origin,
     cookie: Array.from(cookies, ([key, value]) => `${key}=${value}`).join("; "),
   });
+  if (requestKey) headers.set("Idempotency-Key", requestKey);
   if (auth) headers.set("X-Auth-Return-Redirect", "1");
   let encoded: string | URLSearchParams | undefined;
   if (body instanceof URLSearchParams) encoded = body;
@@ -99,6 +101,7 @@ beforeAll(async () => {
     APP_ORIGIN: origin,
     AUTH_URL: origin,
     EMAIL_MODE: "simulated",
+    R2_ACCOUNT_ID: "",
     // Production must still enforce real verification with this flag present.
     DEV_SKIP_EMAIL_VERIFICATION: "true",
   });
@@ -143,6 +146,26 @@ beforeAll(async () => {
       "--import",
       "tsx",
       "scripts/migrations/004-guests.ts",
+    ],
+    { env: process.env },
+  );
+  await promisify(execFile)(
+    process.execPath,
+    [
+      "--conditions=react-server",
+      "--import",
+      "tsx",
+      "scripts/migrations/005-expenses.ts",
+    ],
+    { env: process.env },
+  );
+  await promisify(execFile)(
+    process.execPath,
+    [
+      "--conditions=react-server",
+      "--import",
+      "tsx",
+      "scripts/migrations/006-photos.ts",
     ],
     { env: process.env },
   );
@@ -367,6 +390,7 @@ it("creates a wedding and preserves private invitation context through registrat
   expect(result.status).toBe(201);
   const wedding = (await result.json()).data;
   expect(result.headers.get("location")).toBe(`/api/v1/weddings/${wedding.id}`);
+  await verifyPhotosHttp(wedding.id);
   const existing = await request("/onboarding");
   expect(existing.status).toBe(307);
   expect(existing.headers.get("location")).toBe(`/dashboard/${wedding.id}`);
@@ -675,6 +699,7 @@ it("manages the planning team through scoped, paginated and versioned APIs with 
   expect(cleared.status).toBe(200);
   expect((await cleared.json()).data.youtubeVideoId).toBeUndefined();
   await verifyGuestWorkflow(base, weddingId);
+  await verifyExpenses(base, weddingId);
   const helperPage = await request(`/dashboard/${weddingId}/team`);
   expect(helperPage.status).toBe(200);
   const helperHtml = await helperPage.text();
@@ -1074,7 +1099,9 @@ async function verifyGuestWorkflow(base: string, weddingId: string) {
   const updated = await patch.json();
   expect(updated.data.email).toBe("riya@example.com");
   expect(updated.effects.rsvpsPreserved).toBe(true);
+  await verifyDelivery(base, fn.id, i.id);
   const rotated = await db.findOne(key);
+
   expect(rotated!.token.hash).not.toBe(old!.token.hash);
   expect(
     (await request(root, { name: "Other", email: "RIYA@example.com" })).status,
@@ -1144,4 +1171,247 @@ async function verifyGuestWorkflow(base: string, weddingId: string) {
     false,
     "DELETE",
   );
+}
+
+async function verifyDelivery(
+  base: string,
+  eventId: string,
+  invitationId: string,
+) {
+  const selection = {
+    kind: "guestInvitation",
+    eventId,
+    recipients: { type: "ids", invitationIds: [invitationId] },
+  };
+  const previewResult = await request(base + "/email-previews", selection);
+  expect(previewResult.status).toBe(200);
+  const preview = (await previewResult.json()).data;
+  expect(preview.eligibleCount).toBe(1);
+  const body = { selectionToken: preview.selectionToken };
+  const created = await request(
+    base + "/email-operations",
+    body,
+    false,
+    undefined,
+    "acceptance-delivery",
+  );
+  expect(created.status).toBe(201);
+  const operation = (await created.json()).data;
+  expect(operation.counts.pending).toBe(1);
+  expect(operation.counts.accepted).toBe(0);
+  const replay = await request(
+    base + "/email-operations",
+    body,
+    false,
+    undefined,
+    "acceptance-delivery",
+  );
+  expect((await replay.json()).data.id).toBe(operation.id);
+  const job = await EmailJob.findOne({ operationId: operation.id })
+    .select("+payloadCipher")
+    .orFail();
+  const payload = openPayload<IdentityEmailPayload>(
+    job.payloadCipher!,
+    "email:" + job._id,
+  );
+  const token = payload.text.split("#token=")[1].trim();
+  const access = await request("/api/v1/access/rsvp", { token });
+  expect(access.status).toBe(200);
+  const path = "/api/v1/rsvp/" + invitationId;
+  const before = (await (await request(path)).json()).data;
+  expect(before.guestName).toBe("Riya Shah");
+  expect(before.email).toBeUndefined();
+  const response = await request(
+    path,
+    { expectedVersion: before.version, response: "declined" },
+    false,
+    "PATCH",
+  );
+  expect(response.status).toBe(200);
+  expect((await response.json()).data.response).toBe("declined");
+  expect(
+    (
+      await request(
+        path,
+        { expectedVersion: before.version, response: "attending" },
+        false,
+        "PATCH",
+      )
+    ).status,
+  ).toBe(409);
+  const current = (await (await request(path)).json()).data;
+  expect(
+    (
+      await request(
+        path,
+        { expectedVersion: current.version, response: "attending" },
+        false,
+        "PATCH",
+      )
+    ).status,
+  ).toBe(200);
+  const continuation = await request(
+    base + "/email-operations/" + operation.id + "/continue",
+    {},
+  );
+  expect(continuation.status).toBe(200);
+  expect((await continuation.json()).data.batch.simulated).toBe(1);
+  expect(
+    (await (await request(base + "/email-operations/" + operation.id)).json())
+      .data.counts.accepted,
+  ).toBe(0);
+  expect(
+    (
+      await (
+        await request(
+          base + "/email-operations/" + operation.id + "/continue",
+          {},
+        )
+      ).json()
+    ).data.batch.claimed,
+  ).toBe(0);
+}
+
+async function verifyExpenses(base: string, weddingId: string) {
+  const root = base + "/expenses";
+  expect(
+    (await (await request(root + "/summary")).json()).data.totalPaise,
+  ).toBe(0);
+  expect(
+    (
+      await request(root, {
+        title: "Venue",
+        payerName: "Planner",
+        expenseDate: "2026-11-25",
+        paidPaise: 100,
+      })
+    ).status,
+  ).toBe(422);
+  const created = await request(root, {
+    title: "Venue",
+    payerName: "Planner",
+    expenseDate: "2026-11-25",
+    paidPaise: 2000000,
+    remainingPaise: 500000,
+    firstPaymentDate: "2026-11-20",
+    latestPaymentDate: "2026-11-20",
+    remainingDueDate: "2026-12-01",
+  });
+  expect(created.status).toBe(201);
+  const e = (await created.json()).data;
+  expect(e.totalPaise).toBe(2500000);
+  expect(
+    await (await request("/dashboard/" + weddingId + "/expenses")).text(),
+  ).toContain("Venue");
+  const patch = {
+    expectedVersion: e.version,
+    paidPaise: 2500000,
+    remainingPaise: 0,
+    latestPaymentDate: "2026-11-25",
+    remainingDueDate: null,
+  };
+  const saved = await request(root + "/" + e.id, patch, false, "PATCH");
+  expect(saved.status).toBe(200);
+  const value = (await saved.json()).data;
+  expect(value.firstPaymentDate).toBe("2026-11-20");
+  expect(value.remainingDueDate).toBeUndefined();
+  expect((await request(root + "/" + e.id, patch, false, "PATCH")).status).toBe(
+    409,
+  );
+  expect(
+    (await (await request(root + "?outstanding=true")).json()).data,
+  ).toHaveLength(0);
+  expect(
+    (
+      await request(
+        root + "/" + e.id + "?expectedVersion=" + value.version,
+        undefined,
+        false,
+        "DELETE",
+      )
+    ).status,
+  ).toBe(204);
+  expect(
+    (await (await request(root + "/summary")).json()).data.totalPaise,
+  ).toBe(0);
+}
+
+async function verifyPhotosHttp(w: string) {
+  const savedCookies = new Map(cookies);
+  const base = `/api/v1/weddings/${w}/gallery-access`;
+  const metadata = await request(base);
+  expect(metadata.status).toBe(200);
+  expect(JSON.stringify(await metadata.json())).not.toContain("token");
+  const links: Record<string, string> = {};
+  for (const purpose of ["upload", "view"]) {
+    const result = await request(`${base}/${purpose}/share-link`, {});
+    expect(result.status).toBe(200);
+    expect(result.headers.get("cache-control")).toContain("no-store");
+    links[purpose] = new URLSearchParams(
+      new URL((await result.json()).data.url).hash.slice(1),
+    ).get("token")!;
+  }
+  const page = await request(`/dashboard/${w}/photos`);
+  expect(page.status).toBe(200);
+  expect(await page.text()).toContain("Photo storage isn’t configured yet");
+  try {
+    cookies.clear();
+    expect((await request(base)).status).toBe(401);
+    expect((await request(`/api/v1/gallery/${w}/photos`)).status).toBe(401);
+    expect(
+      (
+        await request("/api/v1/access/gallery", {
+          token: links.upload,
+          purpose: "view",
+        })
+      ).status,
+    ).toBe(404);
+    const upload = await request("/api/v1/access/gallery", {
+      token: links.upload,
+      purpose: "upload",
+    });
+    expect(upload.status).toBe(200);
+    expect(upload.headers.getSetCookie().join(";")).toContain("HttpOnly");
+    expect((await upload.json()).data.cleanPath).toBe(`/gallery/upload/${w}`);
+    expect((await request(`/api/v1/gallery/${w}/photos`)).status).toBe(401);
+    expect((await request(`/gallery/upload/${w}`)).status).toBe(200);
+    const unavailable = await request(
+      `/api/v1/gallery/${w}/uploads`,
+      { filename: "photo.jpg", contentType: "image/jpeg", sizeBytes: 100 },
+      false,
+      undefined,
+      "isolated-photo-request-key",
+    );
+    expect(unavailable.status).toBe(503);
+    expect((await unavailable.json()).error.code).toBe(
+      "STORAGE_NOT_CONFIGURED",
+    );
+    cookies.clear();
+    expect(
+      (
+        await request("/api/v1/access/gallery", {
+          token: links.view,
+          purpose: "view",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(`/api/v1/gallery/${w}/uploads`, {
+          filename: "photo.jpg",
+          contentType: "image/jpeg",
+          sizeBytes: 100,
+        })
+      ).status,
+    ).toBe(401);
+    const unsafe = await fetch(`${origin}/api/v1/access/gallery`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin },
+      body: JSON.stringify({ token: links.view, purpose: "view" }),
+    });
+    expect(unsafe.status).toBe(403);
+  } finally {
+    cookies.clear();
+    for (const [key, value] of savedCookies) cookies.set(key, value);
+  }
 }

@@ -23,23 +23,31 @@
     "test:auth-http": "npm run build && vitest run --config vitest.http.config.mts",
     "db:migrate:guests": "node --conditions=react-server --import tsx scripts/migrations/004-guests.ts",
     "db:migrate:events": "node --conditions=react-server --import tsx scripts/migrations/003-events.ts",
-    "db:migrate:weddings": "node --conditions=react-server --import tsx scripts/migrations/002-weddings.ts"
+    "db:migrate:weddings": "node --conditions=react-server --import tsx scripts/migrations/002-weddings.ts",
+    "db:migrate:expenses": "node --conditions=react-server --import tsx scripts/migrations/005-expenses.ts",
+    "db:migrate:photos": "node --conditions=react-server --import tsx scripts/migrations/006-photos.ts",
+    "photos:reconcile": "node --conditions=react-server --import tsx scripts/reconcile-photos.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1177.0",
+    "@aws-sdk/s3-request-presigner": "3.1177.0",
     "@fastify/csrf": "8.1.1",
     "@next/env": "16.4.6",
     "@node-rs/argon2": "2.2.2",
     "mongoose": "9.12.3",
     "next": "16.4.6",
     "next-auth": "5.0.0-beta.32",
+    "qrcode": "1.5.4",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "resend": "6.39.0",
     "server-only": "0.0.1",
+    "sharp": "0.35.5",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "24.19.2",
+    "@types/qrcode": "1.5.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "eslint": "9.39.5",

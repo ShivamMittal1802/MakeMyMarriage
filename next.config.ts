@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
       "/join/:path*",
       "/invitations/:path*",
       "/rsvp/:path*",
+      "/gallery/:path*",
       "/dashboard/:path*",
     ].map((source) => ({
       source,
