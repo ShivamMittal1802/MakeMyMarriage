@@ -6,9 +6,9 @@ A portfolio wedding-management application built as a modular monolith with Next
 
 See the [development progress tracker](docs/development-progress.md) for feature status, open issues, verification, and the work log. Repository agent instructions in [AGENTS.md](AGENTS.md) require updates alongside future features and bug fixes.
 
-The landing page links to working registration and login routes. Identity includes Argon2id passwords, Auth.js credentials/JWT sessions, explicit email verification, password recovery, session invalidation, and a protected account entry page. Wedding onboarding now includes details, review, atomic creation, confirmation, a verification gate, and private planning-team invitation acceptance. A minimal member-only wedding entry shows saved details and lets authorised organisers create/share invitations. The full dashboard and public wedding website remain future work; landing-page previews remain fictional illustrations.
+The landing page links to working registration and login routes. Identity includes Argon2id passwords, Auth.js credentials/JWT sessions, explicit email verification, password recovery, session invalidation, and a protected account entry page. Wedding onboarding now includes details, review, atomic creation, confirmation, a verification gate, and private planning-team invitation acceptance. A minimal member-only wedding entry shows saved details and lets authorised organisers create/share invitations. The wedding dashboard links to the public celebration page; landing-page previews remain fictional illustrations.
 
-Public pages build and run without external configuration. Account fields remain editable when configuration is missing; submission stays disabled with an explanatory notice until the required server settings exist. Development Atlas connectivity, both migrations, and registration/login HTTP acceptance have been verified. The configured account check also covered wrong-password rejection, current account access, the unverified-email gate, and logout. Real Resend inbox delivery and deployment remain unverified. Simulated email persists encrypted messages without sending them or proving email ownership.
+The landing page runs without external configuration. Public wedding pages read the configured wedding and event collections. Account fields remain editable when configuration is missing; submission stays disabled with an explanatory notice until the required server settings exist. Development Atlas connectivity, both migrations, and registration/login HTTP acceptance have been verified. The configured account check also covered wrong-password rejection, current account access, the unverified-email gate, and logout. Real Resend inbox delivery and deployment remain unverified. Simulated email persists encrypted messages without sending them or proving email ownership.
 
 ## Local setup
 
@@ -102,7 +102,7 @@ npm run db:migrate:weddings
 npm run db:migrate:events
 ```
 
-The third command prepares the event collection and schedule index. It passed in isolated MongoDB and is pending on development Atlas. The first two commands prepare identity and wedding membership. Both were verified against isolated MongoDB fixtures and have now succeeded against the configured development Atlas database. Runtime registration/login require read/write permission in addition to migration privileges; both permission classes are now working in the configured development environment. Neither command changes cloud permissions. Wedding migration refuses a legacy permanent unique `memberships.userId` index, which needs a controlled audit rather than an automatic drop.
+The third command prepares the event collection and schedule index. It passed in isolated MongoDB and on development Atlas. The first two commands prepare identity and wedding membership. Both were verified against isolated MongoDB fixtures and have now succeeded against the configured development Atlas database. Runtime registration/login require read/write permission in addition to migration privileges; both permission classes are now working in the configured development environment. Neither command changes cloud permissions. Wedding migration refuses a legacy permanent unique `memberships.userId` index, which needs a controlled audit rather than an automatic drop.
 
 Application requests check required validators, validation enforcement, and index definitions and do not silently create them. An incomplete migration fails closed. The MongoDB deployment must support transactions (Atlas or a replica set), and the migration identity needs collection/index/validator permissions. The additive migration can be run again; it never drops data or indexes.
 
@@ -138,7 +138,7 @@ The production HTTP suite deliberately sets the flag and still verifies the real
 
 ## Wedding onboarding
 
-Open `/onboarding` after login. Accounts that satisfy the verification check and have no membership can enter the couple’s names, a valid date, location, website slug, optional introduction, and their own role. Review preserves edits before an explicit create action. Creation commits the wedding, permanent owner membership, and separate encrypted photo upload/view access records in one transaction. Photo storage and public website rendering are not implemented by those records. The selected Bride/Groom/Manager role is separate from ownership; names do not create accounts or assign roles. Wedding timezone and currency are fixed to Asia/Kolkata and INR.
+Open `/onboarding` after login. Accounts that satisfy the verification check and have no membership can enter the couple’s names, a valid date, location, website slug, optional introduction, and their own role. Review preserves edits before an explicit create action. Creation commits the wedding, permanent owner membership, and separate encrypted photo upload/view access records in one transaction. The wedding record supplies the public celebration details. Photo storage remains planned. The selected Bride/Groom/Manager role is separate from ownership; names do not create accounts or assign roles. Wedding timezone and currency are fixed to Asia/Kolkata and INR.
 
 Members return to `/dashboard/[weddingId]`, a minimal private entry with real saved details and an Open planning team link. `/dashboard/[weddingId]/team` contains the active roster and administrator-only pending invitations. The owner, bride and groom can create/share/revoke private invitations, change non-owner roles and remove non-owner members. Managers can view the active roster; they cannot read invitation emails or perform administration. Ownership and the owner’s selected role remain immutable. Creation does not send email. Invitations are tied to an intended email and expire after seven days; pending invitations do not reserve a Bride/Groom role.
 
@@ -149,6 +149,10 @@ From the wedding dashboard, select **Edit wedding details** to update the names,
 ## Wedding details editing
 
 Select **Edit wedding details** on the wedding dashboard to update the couple’s names, date, location, introduction, or YouTube livestream link. Any active member can save changes. Clearing the link removes the saved stream. If another member saves first, review the latest details before editing again. The wedding address and owner are fixed.
+
+## Public wedding website
+
+Visitors can open `/weddings/{slug}` without an account. The dashboard links to this page under **Wedding website address**. It shows the couple, location, wedding date, optional introduction, chronological IST schedule, and a YouTube player and fallback link when configured. If the schedule is unavailable, visitors can retry while reading the wedding details. The schedule uses the existing event migration.
 
 ## Wedding events
 
@@ -189,7 +193,7 @@ The API's `/api/v1` paths supersede the architecture's illustrative paths. The d
 
 1. Complete controlled Resend inbox and browser acceptance for identity. Configured Atlas migrations and registration/login HTTP checks have passed; external email delivery is not yet verified.
 2. Complete onboarding browser/responsive acceptance; Atlas permissions and both migrations are verified. Team administration, role changes, revocation/removal and their API/concurrency tests are implemented; complete their browser acceptance next.
-3. Verify the wedding details editor in a browser. Complete responsive Events acceptance, then build public projections and dashboard summaries.
+3. Verify the wedding details editor in a browser. Complete responsive Events and celebration-page acceptance, then build dashboard summaries.
 4. Guests, event invitations, scoped RSVP grants, durable email operations, and manual continuation.
 5. Expenses, payment-date rules, totals, soft deletion, and concurrent-edit handling.
 6. Private photos, storage accounting, previews, original downloads, cleanup, QR codes, livestream settings, and acceptance verification.

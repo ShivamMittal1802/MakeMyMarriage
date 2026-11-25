@@ -61,7 +61,11 @@ export default async function Page({
               {access.isOwner && <span className={styles.badge}>Owner</span>}
             </p>
             <p className={styles.small}>Wedding website address</p>
-            <p className={styles.breakText}>{wedding.publicUrl}</p>
+            <p className={styles.breakText}>
+              <Link href={`/weddings/${wedding.slug}`}>
+                {wedding.publicUrl}
+              </Link>
+            </p>
           </div>
           {wedding.introduction && (
             <p className={styles.fullWidth}>{wedding.introduction}</p>

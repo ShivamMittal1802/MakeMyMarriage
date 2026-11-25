@@ -1,3 +1,5 @@
+import { Wedding } from "@/modules/weddings/models";
+import { WeddingEvent } from "@/modules/events/model";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { createHmac, randomBytes } from "node:crypto";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
@@ -897,4 +899,110 @@ it("maintains a wedding schedule with IST times, cursor ordering, stale-write ch
   await login("planning helper password", "team-admin-http@example.com");
   expect((await request(api)).status).toBe(404);
   expect((await request(api, values)).status).toBe(404);
+});
+
+it("serves the celebration anonymously with public-only fields, fresh event pages and an optional stream", async () => {
+  const owner = new mongoose.Types.ObjectId();
+  const wedding = await Wedding.create({
+    ownerUserId: owner,
+    slug: "public-fixture",
+    couple: { brideName: "Ananya", groomName: "Aarav" },
+    weddingDate: "2027-02-13",
+    location: "Jaipur",
+  });
+  const empty = await fetch(origin + "/weddings/" + wedding.slug);
+  expect(await empty.text()).toContain(
+    "The wedding schedule hasn’t been added yet.",
+  );
+  const details = {
+    weddingId: wedding._id,
+    createdBy: owner,
+    updatedBy: owner,
+    startsAt: new Date("2027-02-12T07:00:00Z"),
+    location: "Garden",
+  };
+  await WeddingEvent.create([
+    {
+      ...details,
+      name: "Mehendi",
+      endsAt: new Date("2027-02-12T09:00:00Z"),
+      description: "Together in the garden.",
+    },
+    { ...details, name: "Sangeet", isDeleted: true },
+    {
+      ...details,
+      weddingId: new mongoose.Types.ObjectId(),
+      name: "Other wedding only",
+    },
+  ]);
+  const page = "/weddings/" + wedding.slug,
+    api = "/api/v1/public" + page;
+  // Public requests deliberately have no cookies, including after member edits.
+  const visit = (path: string) => fetch(origin + path, { redirect: "manual" });
+  const first = await visit(api);
+  expect(first.status).toBe(200);
+  expect(first.headers.get("cache-control")).toContain("no-store");
+  const publicData = (await first.json()).data;
+  expect(publicData).toEqual({
+    slug: wedding.slug,
+    couple: wedding.couple,
+    location: wedding.location,
+    weddingDate: wedding.weddingDate,
+    timezone: "Asia/Kolkata",
+    eventsUrl: api + "/events",
+  });
+  const html = await (await visit(page)).text();
+  expect(html).toContain("Mehendi");
+  expect(html).not.toContain("Sangeet");
+  expect(html).not.toContain("Open on YouTube");
+  expect(html).not.toContain(String(owner));
+  expect(html).not.toContain("Other wedding only");
+  expect(html).not.toContain(String(wedding._id));
+  await Wedding.updateOne(
+    { _id: wedding._id },
+    {
+      $set: {
+        introduction: "Welcome to our celebration!",
+        youtubeVideoId: "abcdefghijk",
+      },
+    },
+  );
+  const live = await (await visit(page)).text();
+  expect(live).toContain("Welcome to our celebration!");
+  expect(live).toContain("https://www.youtube-nocookie.com/embed/abcdefghijk");
+  expect(live).toContain("https://www.youtube.com/watch?v=abcdefghijk");
+  const add = await WeddingEvent.create({
+    ...details,
+    name: "Morning ceremony",
+    location: "Courtyard",
+    startsAt: "2027-02-13T08:00:00+05:30",
+  });
+
+  const eventPage = await (await visit(api + "/events?limit=1")).json();
+  expect(Object.keys(eventPage.data[0]).sort()).toEqual(
+    ["id", "name", "location", "startsAt", "endsAt", "description"].sort(),
+  );
+  expect(eventPage.data[0].name).toBe("Mehendi");
+  const cursor = encodeURIComponent(eventPage.page.nextCursor);
+  const second = await (
+    await visit(api + "/events?limit=1&cursor=" + cursor)
+  ).json();
+  expect(second.data).toEqual([
+    {
+      id: String(add._id),
+      name: "Morning ceremony",
+      location: "Courtyard",
+      startsAt: "2027-02-13T02:30:00.000Z",
+    },
+  ]);
+  expect((await visit(api + "/events?limit=2&cursor=" + cursor)).status).toBe(
+    400,
+  );
+  expect((await visit(api + "/events?includeDeleted=true")).status).toBe(422);
+  const missing = await visit("/weddings/no-such-celebration");
+  expect(missing.status).toBe(404);
+  expect(await missing.text()).toContain("Wedding page unavailable");
+  expect(
+    (await visit("/api/v1/public/weddings/no-such-celebration/events")).status,
+  ).toBe(404);
 });

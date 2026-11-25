@@ -1,0 +1,260 @@
+.page {
+  background: #fff8f8;
+  color: #382330;
+  min-height: 100dvh;
+  overflow-wrap: anywhere;
+}
+.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px clamp(18px, 6vw, 100px);
+  border-bottom: 1px solid #eddee5;
+  gap: 20px;
+}
+.brand,
+.signature,
+.foot a {
+  font-family: var(--font-display);
+  color: #681c35;
+}
+.bar nav,
+.actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.bar nav a,
+.foot a {
+  text-decoration: none;
+}
+.bar nav a:hover,
+.foot a:hover {
+  text-decoration: underline;
+}
+.skip {
+  position: absolute;
+  left: 12px;
+  top: -100px;
+  background: white;
+  padding: 8px;
+}
+.skip:focus {
+  top: 8px;
+}
+.paper,
+.message {
+  background: white;
+  max-width: 1000px;
+  margin: clamp(20px, 5vw, 64px) auto;
+  border: 1px solid #f3e6ec;
+  border-radius: 14px;
+  padding: clamp(24px, 5vw, 70px);
+  box-shadow: 0 6px 30px #59263a0d;
+}
+.hero,
+.schedule,
+.stream,
+.signature,
+.foot,
+.message {
+  text-align: center;
+}
+.hero h1,
+.paper h2,
+.message h1,
+.group h3 {
+  font-family: var(--font-display);
+  color: #651d37;
+  font-weight: 500;
+  line-height: 1.18;
+}
+.hero h1 {
+  font-size: clamp(2.65rem, 6vw, 5.2rem);
+  margin: 8px 0 15px;
+}
+.paper h2,
+.message h1 {
+  font-size: clamp(2rem, 4vw, 3.1rem);
+}
+.monogram {
+  display: inline-grid;
+  place-items: center;
+  min-width: 52px;
+  min-height: 52px;
+  border: 1px solid #e8cfd9;
+  border-radius: 50%;
+  color: #72253e;
+  background: #fceef2;
+  font: italic 1rem var(--font-display);
+}
+.kicker {
+  font-size: 0.73rem;
+  font-weight: 600;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  margin-top: 16px;
+}
+.meta,
+.caption,
+.description,
+.intro {
+  color: var(--color-muted);
+}
+.ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #b68a9c;
+  margin: 18px 0;
+}
+.ornament::before,
+.ornament::after {
+  content: "";
+  width: 64px;
+  height: 1px;
+  background: #eedde5;
+}
+.intro {
+  max-width: 55ch;
+  margin: auto;
+  white-space: pre-line;
+}
+.actions {
+  margin-top: 20px;
+}
+.primary,
+.secondary {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 20px;
+  text-decoration: none;
+  display: inline-block;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.primary {
+  background: #651d37;
+  color: white;
+}
+.secondary {
+  background: #f9eaf0;
+  color: #61223b;
+}
+.secondary:disabled {
+  opacity: 0.65;
+}
+.schedule,
+.stream {
+  margin-top: clamp(48px, 8vw, 90px);
+}
+.caption {
+  font-size: 0.88rem;
+  margin-top: 7px;
+}
+.group {
+  text-align: left;
+  margin: 32px 0;
+}
+.group h3 {
+  font-size: clamp(1.15rem, 2vw, 1.55rem);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.group h3::before {
+  content: "";
+  background: #792443;
+  border-radius: 50%;
+  width: 7px;
+  height: 7px;
+  flex: none;
+}
+.group h3::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: #eddce4;
+}
+.group ul {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.group li {
+  background: #fff3f7;
+  padding: 18px 22px;
+  border-radius: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.when {
+  font-weight: 600;
+  font-size: 0.94rem;
+}
+.group h4 {
+  margin: 0;
+  color: #64213b;
+  font-size: 0.94rem;
+}
+.venue {
+  text-align: right;
+  margin-left: auto;
+  max-width: 48%;
+}
+.description {
+  font-size: 0.92rem;
+  font-style: italic;
+  white-space: pre-line;
+}
+.state {
+  margin: 25px 0;
+}
+.stream iframe {
+  display: block;
+  width: 100%;
+  max-width: 740px;
+  aspect-ratio: 16/9;
+  height: auto;
+  border: 0;
+  border-radius: 12px;
+  margin: 24px auto;
+  background: #301b24;
+}
+.signature {
+  font-style: italic;
+  margin-top: 56px;
+}
+.foot {
+  padding: 0 16px 40px;
+}
+.message p {
+  margin: 16px auto;
+}
+@media (max-width: 760px) {
+  .paper {
+    margin: 20px 12px;
+    padding: 36px 18px;
+  }
+  .group li {
+    display: grid;
+    gap: 4px;
+  }
+  .venue {
+    text-align: left;
+    margin: 0;
+    max-width: none;
+  }
+  .hero h1 {
+    line-height: 1.14;
+  }
+  .bar {
+    font-size: 0.9rem;
+  }
+}
